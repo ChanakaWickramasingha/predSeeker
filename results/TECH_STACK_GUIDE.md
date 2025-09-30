@@ -442,31 +442,13 @@ streamlit run streamlit_app.py --logger.level debug
 4. **Test Thoroughly:** Manual testing across browsers/devices
 5. **Submit PR:** Pull request with detailed description
 
-### **Code Standards:**
-- **Python:** Follow PEP 8 style guidelines
-- **Documentation:** Comprehensive docstrings and comments
-- **Testing:** Manual testing checklist for all changes
-- **Git:** Descriptive commit messages and logical commits
 
-### **Enhancement Ideas:**
-- Additional skill categories (Mobile, AI/ML, etc.)
-- Industry-specific models (Finance, Healthcare, etc.)
-- Multi-language support for global users
-- Integration with job boards and career platforms
 
 ---
 
-## 📞 Support & Contact
-
-### **Technical Support:**
-- **Issues:** GitHub Issues for bug reports
-- **Documentation:** Comprehensive README and guides
-- **Community:** Streamlit community forums for framework questions
-
 ### **Project Information:**
 - **Repository:** https://github.com/ChanakaWickramasingha/predSeeker
-- **Branch:** Thiyangi_training (development branch)
-- **License:** MIT (check repository for current license)
+
 
 ---
 
