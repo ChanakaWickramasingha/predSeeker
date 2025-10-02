@@ -1285,6 +1285,93 @@ def main():
     
     # Enhanced Sidebar
     with st.sidebar:
+        # Appearance toggle
+        appearance = st.selectbox("Appearance", ["Light", "Dark"], index=0)
+        if appearance == "Dark":
+            st.markdown("""
+            <script>
+            const r = document.documentElement;
+            r.setAttribute('data-theme','dark');
+            </script>
+            """, unsafe_allow_html=True)
+            st.markdown(
+                """
+                <style>
+                [data-theme='dark'] {
+                    --bg: #0b1220;
+                    --panel: #0f172a;
+                    --panel-2: #111827;
+                    --text: #e5e7eb;
+                    --muted: #a1a1aa;
+                    --accent1: #818cf8;
+                    --accent2: #a78bfa;
+                    --border: rgba(255,255,255,0.08);
+                }
+
+                /* Strong dark overrides so they win over earlier light styles */
+                [data-theme='dark'] .stApp, [data-theme='dark'] .stApp *,
+                [data-theme='dark'] [data-testid=\"stMarkdownContainer\"] *,
+                [data-theme='dark'] .stTabs [data-baseweb=\"tab-panel\"] * { color: var(--text) !important; }
+
+                [data-theme='dark'] .stApp { background: linear-gradient(135deg, var(--bg) 0%, var(--panel-2) 100%) !important; }
+                [data-theme='dark'] .main .block-container { background: rgba(15, 23, 42, 0.92) !important; box-shadow: 0 12px 30px rgba(0,0,0,0.6) !important; }
+
+                /* Headings */
+                [data-theme='dark'] .main-header { background: linear-gradient(135deg, var(--accent1) 0%, var(--accent2) 100%) !important; -webkit-background-clip: text !important; -webkit-text-fill-color: transparent !important; }
+                [data-theme='dark'] .prediction-result-header, [data-theme='dark'] .chart-title, [data-theme='dark'] h1, [data-theme='dark'] h2, [data-theme='dark'] h3 { color: var(--text) !important; }
+
+                /* Panels */
+                [data-theme='dark'] .prediction-container, [data-theme='dark'] .chart-container, [data-theme='dark'] .sidebar-section, [data-theme='dark'] .info-box, [data-theme='dark'] .footer-section { 
+                    background: linear-gradient(135deg, var(--panel) 0%, var(--panel-2) 100%) !important; 
+                    border-color: var(--border) !important;
+                }
+                [data-theme='dark'] .info-success { background: linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.10) 100%) !important; color: #d1fae5 !important; border-left-color: #34d399 !important; }
+                [data-theme='dark'] .info-warning { background: linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(245,158,11,0.10) 100%) !important; color: #fde68a !important; border-left-color: #f59e0b !important; }
+                [data-theme='dark'] .info-primary { background: linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.12) 100%) !important; color: #bfdbfe !important; border-left-color: #60a5fa !important; }
+
+                /* Tabs */
+                [data-theme='dark'] .stTabs [data-baseweb=\"tab-list\"] { background: linear-gradient(135deg, #0b1220, #0f172a) !important; border: 1px solid var(--border) !important; box-shadow: none !important; }
+                [data-theme='dark'] .stTabs [data-baseweb=\"tab\"] { background: #0f172a !important; color: var(--text) !important; border: 1px solid transparent !important; }
+                [data-theme='dark'] .stTabs [data-baseweb=\"tab\"] * { color: var(--text) !important; }
+                [data-theme='dark'] .stTabs [data-baseweb=\"tab\"]:hover { border-color: var(--accent1) !important; background: #111827 !important; }
+                [data-theme='dark'] .stTabs [aria-selected=\"true\"] { background: linear-gradient(135deg, var(--accent1) 0%, var(--accent2) 100%) !important; color: #0b1020 !important; }
+
+                /* Inputs */
+                [data-theme='dark'] .stSelectbox > div > div, [data-theme='dark'] .stNumberInput > div > div { background: #0f172a !important; border: 2px solid #334155 !important; box-shadow: none !important; }
+                [data-theme='dark'] .stSelectbox [data-baseweb=\"select\"] { background: transparent !important; }
+                [data-theme='dark'] .stSelectbox [role=\"listbox\"] { background: #0f172a !important; border: 1px solid #334155 !important; }
+                [data-theme='dark'] .stSelectbox [role=\"option\"] { background: transparent !important; color: var(--text) !important; }
+                [data-theme='dark'] .stSelectbox [role=\"option\"]:hover { background: #111827 !important; }
+                [data-theme='dark'] .stNumberInput input { background: transparent !important; color: var(--text) !important; }
+                [data-theme='dark'] .stCheckbox input[type=\"checkbox\"] { border-color: #64748b !important; background: #0f172a !important; }
+                [data-theme='dark'] .stCheckbox > label, [data-theme='dark'] .stCheckbox span, [data-theme='dark'] .stCheckbox > label > div { color: var(--text) !important; }
+
+                /* Sidebar */
+                [data-theme='dark'] [data-testid=\"stSidebar\"], [data-theme='dark'] .css-1d391kg { background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%) !important; border-right: 2px solid var(--border) !important; }
+                [data-theme='dark'] .sidebar-header { border-bottom-color: #334155 !important; }
+                [data-theme='dark'] .sidebar-section div[style*='color: #374151'] { color: var(--text) !important; }
+
+                /* Metrics */
+                [data-theme='dark'] .stMetric { background: #0f172a !important; border-color: var(--border) !important; }
+                [data-theme='dark'] .stMetric label { color: #cbd5e1 !important; }
+
+                /* Buttons */
+                [data-theme='dark'] .stButton > button { box-shadow: 0 8px 26px rgba(129, 140, 248, 0.35) !important; }
+                [data-theme='dark'] .stButton > button:hover { filter: brightness(1.03); }
+
+                /* Skill category card */
+                [data-theme='dark'] .skill-category { background: #0f172a !important; border-left-color: var(--accent1) !important; box-shadow: 0 3px 12px rgba(0,0,0,0.35) !important; }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown("""
+            <script>
+            const r = document.documentElement;
+            r.setAttribute('data-theme','light');
+            </script>
+            """, unsafe_allow_html=True)
         st.markdown("""
         <div class="sidebar-section">
             <h3 class="sidebar-header">Model Performance</h3>
@@ -1607,6 +1694,13 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
                 
+                # Progress visualization
+                st.progress(int(probability * 100), text=f"Employment probability: {probability:.1%}")
+
+                # Celebration for high scores
+                if probability >= 0.8:
+                    st.balloons()
+
                 # Only show gauge if prediction exists
                 if 'prediction' in st.session_state:
                     st.markdown('<div class="chart-container">', unsafe_allow_html=True)
@@ -1705,6 +1799,22 @@ def main():
                 for i, rec in enumerate(recommendations, 1):
                     st.markdown(f"**{i}.** {rec}")
                 
+                # Downloadable report
+                report = {
+                    "prediction": "Employed" if prediction == 1 else "Not Employed",
+                    "probability": round(float(probability), 4),
+                    "raw_probability": round(float(st.session_state.get('raw_probability', probability)), 4),
+                    "timestamp": datetime.utcnow().isoformat() + 'Z',
+                    "inputs": user_inputs,
+                }
+                st.download_button(
+                    label="Download Report (JSON)",
+                    data=json.dumps(report, indent=2),
+                    file_name="predseeker_report.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
+
                 st.markdown('</div>', unsafe_allow_html=True)
 
     
