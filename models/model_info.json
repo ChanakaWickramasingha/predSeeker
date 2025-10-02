@@ -8,7 +8,7 @@
     "Recall": 0.8463,
     "F1-Score": 0.8275,
     "ROC-AUC": 0.8951,
-    "Training_Time": 0.3276
+    "Training_Time": 0.567
   },
   "features": [
     "Programming_Score",
@@ -33,6 +33,6 @@
     "HasProfessionalExperience",
     "HasSalaryInfo"
   ],
-  "training_date": "2025-09-30 18:14:29",
+  "training_date": "2025-10-02 10:42:56",
   "random_state": 42
 }
