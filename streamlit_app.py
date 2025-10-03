@@ -1,18 +1,25 @@
 # streamlit_app.py
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
 import json
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import os
+from io import BytesIO
+import importlib.util
+
+# Optional PDF deps (defer actual import to usage site)
+try:
+    REPORTLAB_AVAILABLE = importlib.util.find_spec("reportlab") is not None
+except Exception:
+    REPORTLAB_AVAILABLE = False
 
 # Configure the page
 st.set_page_config(
     page_title="PredSeeker - Developer Employment Predictor",
-    page_icon="🎯",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -233,6 +240,40 @@ st.markdown("""
     }
 
     .stButton > button:disabled {
+        background: #6c757d !important;
+        color: white !important;
+        opacity: 0.6 !important;
+        cursor: not-allowed !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Download button styling */
+    .stDownloadButton > button {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+        color: #ffffff !important;
+        border-radius: 12px !important;
+        border: none !important;
+        padding: 0.75rem 2rem !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3) !important;
+        transition: all 0.3s ease !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stDownloadButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4) !important;
+        background: linear-gradient(135deg, #0056b3 0%, #003d82 100%) !important;
+    }
+
+    .stDownloadButton > button:active {
+        transform: translateY(0px) !important;
+    }
+
+    .stDownloadButton > button:disabled {
         background: #6c757d !important;
         color: white !important;
         opacity: 0.6 !important;
@@ -755,6 +796,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 @st.cache_resource
 def load_model_and_info():
     """Load the trained model and metadata"""
@@ -772,15 +814,18 @@ def load_model_and_info():
             return None, None
 
         model = joblib.load(model_path)
-        with open(info_path, 'r') as f:
+        with open(info_path, 'r', encoding='utf-8') as f:
             model_info = json.load(f)
+        # keep model info accessible later
+        st.session_state['model_info'] = model_info
         return model, model_info
-    except Exception as e:
+    except (FileNotFoundError, OSError, IOError, json.JSONDecodeError, ValueError) as e:
         st.error(f"Error loading model: {str(e)}")
         st.write("Please make sure you have:")
         st.write("1. Run the model training notebook")
         st.write("2. The 'models' directory exists with trained model files")
         return None, None
+
 
 # Define skill families (same as in preprocessing)
 SKILL_FAMILIES = {
@@ -809,6 +854,7 @@ SKILL_FAMILIES = {
     ]
 }
 
+
 def calculate_skill_scores(selected_skills):
     """Calculate skill family scores based on selected skills (same logic as preprocessing)"""
     scores = {}
@@ -816,12 +862,14 @@ def calculate_skill_scores(selected_skills):
 
     for family_name, family_techs in SKILL_FAMILIES.items():
         # Count selected technologies from this family
-        selected_from_family = [skill for skill in selected_skills if skill in family_techs]
+        selected_from_family = [
+            skill for skill in selected_skills if skill in family_techs]
         selected_count = len(selected_from_family)
         total_count = len(family_techs)
 
         # Calculate percentage score
-        percentage = (selected_count / total_count) * 100 if total_count > 0 else 0
+        percentage = (selected_count / total_count) * \
+            100 if total_count > 0 else 0
 
         # Store results
         scores[f'{family_name}_Score'] = round(percentage, 1)
@@ -829,18 +877,20 @@ def calculate_skill_scores(selected_skills):
 
     return scores, binary_flags
 
+
 def calculate_derived_features(binary_flags):
     """Calculate skill breadth and full-stack indicator (same logic as preprocessing)"""
     skill_breadth = sum(binary_flags.values())
 
     is_fullstack = 1 if (binary_flags['Has_Programming'] == 1 and
-                        binary_flags['Has_Web'] == 1 and
-                        binary_flags['Has_Database'] == 1) else 0
+                         binary_flags['Has_Web'] == 1 and
+                         binary_flags['Has_Database'] == 1) else 0
 
     return {
         'Skill_Breadth': skill_breadth,
         'Is_FullStack': is_fullstack
     }
+
 
 def create_feature_vector(user_inputs, feature_names):
     """Create feature vector from user inputs using same preprocessing logic"""
@@ -848,7 +898,8 @@ def create_feature_vector(user_inputs, feature_names):
     features = pd.DataFrame(0, index=[0], columns=feature_names)
 
     # Calculate skill scores and flags from selected skills
-    scores, binary_flags = calculate_skill_scores(user_inputs['selected_skills'])
+    scores, binary_flags = calculate_skill_scores(
+        user_inputs['selected_skills'])
     derived_features = calculate_derived_features(binary_flags)
 
     # Set skill scores
@@ -872,14 +923,19 @@ def create_feature_vector(user_inputs, feature_names):
         skill_count = len(user_inputs['selected_skills'])
 
         # Breakdown by skill family for debugging
-        prog_count = len([s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['Programming']])
-        web_count = len([s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['Web']])
-        db_count = len([s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['Database']])
-        cloud_count = len([s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['CloudDevOps']])
+        prog_count = len([s for s in user_inputs['selected_skills']
+                         if s in SKILL_FAMILIES['Programming']])
+        web_count = len(
+            [s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['Web']])
+        db_count = len([s for s in user_inputs['selected_skills']
+                       if s in SKILL_FAMILIES['Database']])
+        cloud_count = len([s for s in user_inputs['selected_skills']
+                          if s in SKILL_FAMILIES['CloudDevOps']])
 
         # Cap at reasonable maximum (training data shows max ~30-40 skills)
         features.loc[0, 'ComputerSkills'] = min(skill_count, 40)
-        print(f"[DEBUG] ComputerSkills = {skill_count} (Prog:{prog_count} + Web:{web_count} + DB:{db_count} + Cloud:{cloud_count})")
+        print(
+            f"[DEBUG] ComputerSkills = {skill_count} (Prog:{prog_count} + Web:{web_count} + DB:{db_count} + Cloud:{cloud_count})")
 
     if 'EducationLevel_Numeric' in feature_names:
         features.loc[0, 'EducationLevel_Numeric'] = user_inputs['education_level']
@@ -906,6 +962,7 @@ def create_feature_vector(user_inputs, feature_names):
         features.loc[0, 'HasSalaryInfo'] = 1 if user_inputs['salary_info'] else 0
 
     return features
+
 
 def reality_check_prediction(probability, user_inputs, scores, derived):
     """Apply reality check to predictions based on employment market patterns"""
@@ -942,60 +999,302 @@ def reality_check_prediction(probability, user_inputs, scores, derived):
 
     return adjusted_probability, adjustment_factors
 
+
 def get_recommendations(probability, user_inputs):
     """Generate personalized recommendations"""
     recommendations = []
 
     # Calculate skill scores for recommendations
-    scores, binary_flags = calculate_skill_scores(user_inputs['selected_skills'])
+    scores, binary_flags = calculate_skill_scores(
+        user_inputs['selected_skills'])
     skill_count = len(user_inputs['selected_skills'])
 
     # Priority recommendations based on critical gaps
     if skill_count <= 3:
-        recommendations.append("� **CRITICAL:** Learn at least 5-8 core technologies")
-        recommendations.append("📚 Focus on popular languages: Python, JavaScript, or Java")
+        recommendations.append(
+            " **CRITICAL:** Learn at least 5-8 core technologies")
+        recommendations.append(
+            " Focus on popular languages: Python, JavaScript, or Java")
 
     if not user_inputs['prof_experience'] and not user_inputs['is_developer']:
-        recommendations.append("💼 **URGENT:** Gain practical experience through projects or internships")
+        recommendations.append(
+            " **URGENT:** Gain practical experience through projects or internships")
 
     # Skill-specific recommendations
     if scores['Programming_Score'] < 30:
-        recommendations.append("� Master at least 2-3 programming languages")
+        recommendations.append(" Master at least 2-3 programming languages")
     if scores['Web_Score'] < 20 and scores['Programming_Score'] > 30:
-        recommendations.append("� Add web development skills (HTML/CSS, React, Node.js)")
+        recommendations.append(
+            " Add web development skills (HTML/CSS, React, Node.js)")
     if scores['Database_Score'] < 15:
-        recommendations.append("🗄️ Learn database fundamentals (SQL, MongoDB)")
+        recommendations.append(" Learn database fundamentals (SQL, MongoDB)")
     if scores['CloudDevOps_Score'] < 15 and skill_count > 8:
-        recommendations.append("☁️ Add cloud/DevOps skills for senior roles")
+        recommendations.append(" Add cloud/DevOps skills for senior roles")
 
     # General recommendations based on probability ranges
     if probability < 0.4:
-        recommendations.append("🎯 Focus on building a strong foundation before applying")
+        recommendations.append(
+            " Focus on building a strong foundation before applying")
         recommendations.append("🏫 Consider bootcamps or formal education")
     elif probability < 0.6:
         recommendations.append("📈 You're on the right track - keep learning!")
-        recommendations.append("🤝 Network with developers in your areas of interest")
+        recommendations.append(
+            " Network with developers in your areas of interest")
     elif probability < 0.8:
-        recommendations.append("� Start applying to positions matching your skills")
-        recommendations.append("� Highlight your technical strengths in applications")
+        recommendations.append(
+            " Start applying to positions matching your skills")
+        recommendations.append(
+            " Highlight your technical strengths in applications")
     else:
-        recommendations.append("🎯 You have strong employability - apply confidently!")
-        recommendations.append("� Consider specialized or senior positions")
+        recommendations.append(
+            " You have strong employability - apply confidently!")
+        recommendations.append(" Consider specialized or senior positions")
 
     return recommendations[:5]  # Return top 5 recommendations
 
+
+def create_pdf_report(user_inputs, probability, raw_probability, prediction, scores, derived, recommendations, model_info):
+    """Build a themed PDF report and return bytes."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import cm
+    from reportlab.lib import colors
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    margin = 2 * cm
+    x = margin
+    y = height - margin
+
+    # Theme
+    brand_color = colors.HexColor('#2E86AB')
+    brand_dark = colors.HexColor('#1f5e78')
+    success_color = colors.HexColor('#28a745')
+    warn_red = colors.HexColor('#dc3545')
+    light_bg = colors.HexColor('#F6FAFD')
+    border_color = colors.HexColor('#E9ECEF')
+
+    def write_line(text, dy=14, font="Helvetica", size=11, color=colors.black):
+        nonlocal y
+        c.setFont(font, size)
+        c.setFillColor(color)
+        c.drawString(x, y, text)
+        y -= dy
+
+    def ensure_space(lines=6, line_height=14):
+        nonlocal y
+        if y - (lines * line_height) < margin:
+            c.showPage()
+            y = height - margin
+            draw_header()
+            y -= 18
+
+    def draw_header():
+        c.setFillColor(brand_color)
+        c.rect(0, height - 2.2*cm, width, 2.2*cm, stroke=0, fill=1)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 18)
+        c.drawString(margin, height - 1.1*cm,
+                     "PredSeeker - Employment Prediction Report")
+        c.setFont("Helvetica", 10)
+        c.drawRightString(width - margin, height - 1.1*cm,
+                          datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+    def draw_section_card(title_text, body_fn, card_height_est=5*cm):
+        nonlocal y
+        ensure_space(lines=int(card_height_est/14) + 6)
+        card_top = y
+        c.setFillColor(light_bg)
+        c.setStrokeColor(border_color)
+        c.roundRect(x - 6, card_top - card_height_est, width - 2 *
+                    margin + 12, card_height_est, 10, stroke=1, fill=1)
+        c.setFillColor(brand_color)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(x, card_top - 16, title_text)
+        y = card_top - 32
+        c.setStrokeColor(border_color)
+        c.line(x - 4, y + 8, width - margin + 4, y + 8)
+        body_fn()
+        y -= 10
+
+    # Header bar
+    draw_header()
+    y -= 24
+
+    # Result card
+    def result_body():
+        nonlocal y
+        result_text = "High Employment Probability" if prediction == 1 else "Room for Improvement"
+        prob_pct = f"{probability*100:.1f}%"
+        raw_pct = f"{raw_probability*100:.1f}%"
+
+        badge_color = success_color if prediction == 1 else warn_red
+        c.setFillColor(badge_color)
+        c.roundRect(x, y - 20, 180, 22, 6, stroke=0, fill=1)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(x + 10, y - 14, result_text)
+        y -= 34
+
+        bar_w = width - 2*margin - 20
+        bar_h = 14
+        c.setFillColor(colors.HexColor('#DEE2E6'))
+        c.roundRect(x, y - bar_h, bar_w, bar_h, 7, stroke=0, fill=1)
+        fill_w = max(0.0, min(1.0, probability)) * bar_w
+        c.setFillColor(brand_dark)
+        c.roundRect(x, y - bar_h, fill_w, bar_h, 7, stroke=0, fill=1)
+        c.setFillColor(brand_color)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawRightString(x + bar_w, y - bar_h - 2, prob_pct)
+        y -= (bar_h + 10)
+
+        c.setFillColor(colors.HexColor('#6C757D'))
+        c.setFont("Helvetica", 10)
+        c.drawString(
+            x, y, f"Raw probability: {raw_pct} (before heuristic adjustment)")
+        y -= 18
+
+    draw_section_card("Result", result_body, card_height_est=4*cm)
+
+    # Skills card
+    def skills_body():
+        nonlocal y
+        c.setFillColor(colors.black)
+        c.setFont("Helvetica", 11)
+        write_line(
+            f"Total Selected Skills: {len(user_inputs['selected_skills'])}", dy=16)
+        write_line(f"Skill Breadth (families): {derived['Skill_Breadth']} / 4")
+        write_line(f"Full-Stack: {'Yes' if derived['Is_FullStack'] else 'No'}")
+        y -= 4
+        score_labels = [
+            ("Programming", scores['Programming_Score']),
+            ("Web", scores['Web_Score']),
+            ("Database", scores['Database_Score']),
+            ("Cloud/DevOps", scores['CloudDevOps_Score'])
+        ]
+        col_w = (width - 2*margin - 10) / 2
+        row_h = 22
+        for i in range(0, len(score_labels), 2):
+            ensure_space(lines=2)
+            for j in range(2):
+                if i + j >= len(score_labels):
+                    continue
+                label, val = score_labels[i + j]
+                px = x + j * col_w
+                c.setFillColor(colors.HexColor('#F1F8FE'))
+                c.roundRect(px, y - row_h + 4, col_w - 8,
+                            row_h, 6, stroke=0, fill=1)
+                c.setFillColor(brand_color)
+                c.setFont("Helvetica-Bold", 10)
+                c.drawString(px + 8, y - 8, f"{label}")
+                c.setFillColor(colors.HexColor('#343A40'))
+                c.setFont("Helvetica", 10)
+                c.drawRightString(px + col_w - 16, y - 8, f"{val:.1f}%")
+            y -= row_h
+
+        if user_inputs['selected_skills']:
+            y -= 4
+            c.setFillColor(brand_color)
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(x, y, "Top Skills")
+            y -= 14
+            c.setFillColor(colors.HexColor('#343A40'))
+            c.setFont("Helvetica", 10)
+            for s in user_inputs['selected_skills'][:8]:
+                ensure_space(lines=1)
+                c.circle(x + 3, y + 3, 2, stroke=0, fill=1)
+                c.drawString(x + 10, y, s)
+                y -= 14
+
+    draw_section_card("Skills Summary", skills_body, card_height_est=7*cm)
+
+    # Profile card
+    def profile_body():
+        nonlocal y
+        rows = [
+            ("Age", str(user_inputs['age'])),
+            ("Gender", user_inputs['gender']),
+            ("Education Level", str(user_inputs['education_level'])),
+            ("Professional Developer",
+             'Yes' if user_inputs['is_developer'] else 'No'),
+            ("Professional Experience",
+             'Yes' if user_inputs['prof_experience'] else 'No'),
+            ("Mental Health Concerns",
+             'Yes' if user_inputs['mental_health'] else 'No'),
+            ("Accessibility Needs",
+             'Yes' if user_inputs['accessibility'] else 'No'),
+        ]
+        row_h = 18
+        label_w = 160
+        for label, value in rows:
+            ensure_space(lines=1)
+            c.setFillColor(colors.HexColor('#F8F9FA'))
+            c.roundRect(x, y - row_h + 4, width - 2*margin -
+                        10, row_h, 6, stroke=0, fill=1)
+            c.setFillColor(colors.HexColor('#6C757D'))
+            c.setFont("Helvetica", 10)
+            c.drawString(x + 8, y - 8, label)
+            c.setFillColor(colors.HexColor('#212529'))
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(x + label_w, y - 8, value)
+            y -= row_h
+
+    draw_section_card("Profile", profile_body, card_height_est=6*cm)
+
+    # Recommendations card
+    def recs_body():
+        nonlocal y
+        for rec in recommendations[:8]:
+            ensure_space(lines=1)
+            txt = str(rec).lstrip('• ').strip()
+            c.setFillColor(brand_color)
+            c.circle(x + 3, y + 3, 2, stroke=0, fill=1)
+            c.setFillColor(colors.HexColor('#343A40'))
+            c.setFont("Helvetica", 10)
+            c.drawString(x + 10, y, txt)
+            y -= 14
+
+    draw_section_card("Recommendations", recs_body, card_height_est=5*cm)
+
+    # Footer / model info
+    y = max(y, 3*cm)
+    c.setStrokeColor(border_color)
+    c.line(margin, y, width - margin, y)
+    y -= 14
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(brand_color)
+    c.drawString(x, y, "Model")
+    y -= 16
+    c.setFillColor(colors.HexColor('#212529'))
+    c.setFont("Helvetica", 10)
+    c.drawString(x, y, f"Algorithm: {model_info.get('model_name', 'N/A')}")
+    y -= 14
+    pm = model_info.get('performance_metrics', {})
+    if isinstance(pm, dict):
+        c.drawString(
+            x, y, f"ROC-AUC: {pm.get('ROC-AUC', 'N/A')}  |  Accuracy: {pm.get('Accuracy', 'N/A')}  |  F1-Score: {pm.get('F1-Score', 'N/A')}")
+        y -= 16
+
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def main():
     # Header
-    st.markdown('<h1 class="main-header">PredSeeker</h1>', unsafe_allow_html=True)
-    st.markdown('<h3 class="sub-header">AI-Powered Developer Employment Predictor</h3>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">PredSeeker</h1>',
+                unsafe_allow_html=True)
+    st.markdown('<h3 class="sub-header">AI-Powered Developer Employment Predictor</h3>',
+                unsafe_allow_html=True)
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
 
     # Load model
     model, model_info = load_model_and_info()
 
     if model is None:
-        st.error("❌ Could not load the trained model. Please check the model files.")
-        st.info("💡 Make sure you have run the model training notebook and the model files exist in the 'models' directory.")
+        st.error(" Could not load the trained model. Please check the model files.")
+        st.info(" Make sure you have run the model training notebook and the model files exist in the 'models' directory.")
         return
 
     # Sidebar - Model Info with enhanced styling
@@ -1005,17 +1304,21 @@ def main():
         <div style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
                    border: 1px solid #dee2e6; border-radius: 10px; padding: 1.5rem; margin: 1rem 0;">
             <h3 style="color: #2E86AB; text-align: center; margin-bottom: 1rem; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem;">
-                📊 Model Performance
+                 Model Performance
             </h3>
         """, unsafe_allow_html=True)
 
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("ROC-AUC", f"{model_info['performance_metrics']['ROC-AUC']:.3f}")
-            st.metric("Accuracy", f"{model_info['performance_metrics']['Accuracy']:.3f}")
+            st.metric(
+                "ROC-AUC", f"{model_info['performance_metrics']['ROC-AUC']:.3f}")
+            st.metric(
+                "Accuracy", f"{model_info['performance_metrics']['Accuracy']:.3f}")
         with col2:
-            st.metric("F1-Score", f"{model_info['performance_metrics']['F1-Score']:.3f}")
-            st.metric("Precision", f"{model_info['performance_metrics']['Precision']:.3f}")
+            st.metric(
+                "F1-Score", f"{model_info['performance_metrics']['F1-Score']:.3f}")
+            st.metric(
+                "Precision", f"{model_info['performance_metrics']['Precision']:.3f}")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1024,7 +1327,7 @@ def main():
         <div style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
                    border: 1px solid #dee2e6; border-radius: 10px; padding: 1.5rem; margin: 1rem 0;">
             <h3 style="color: #2E86AB; text-align: center; margin-bottom: 1rem; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem;">
-                🤖 Model Info
+                 Model Info
             </h3>
             <div style="color: #212529; line-height: 1.6;">
                 <p><strong>Algorithm:</strong> {model_info['model_name']}</p>
@@ -1039,7 +1342,7 @@ def main():
         <div style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
                    border: 1px solid #dee2e6; border-radius: 10px; padding: 1.5rem; margin: 1rem 0;">
             <h3 style="color: #2E86AB; text-align: center; margin-bottom: 1rem; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem;">
-                📈 Dataset Stats
+                 Dataset Stats
             </h3>
             <div style="color: #212529; line-height: 1.6;">
                 <p><strong>Training Samples:</strong> 58,769</p>
@@ -1055,32 +1358,33 @@ def main():
         <div style="background: linear-gradient(135deg, #cce7ff 0%, #b3d7ff 100%);
                    border: 1px solid #007bff; border-radius: 10px; padding: 1rem; margin: 1rem 0; text-align: center;">
             <p style="color: #004085; margin: 0; font-size: 0.9rem;">
-                <strong>💡 Tip:</strong> Select diverse skills across multiple categories for better employment predictions!
+                <strong> Tip:</strong> Select diverse skills across multiple categories for better employment predictions!
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     # Main content
-    tab1, tab2 = st.tabs(["🔮 Make Prediction", "📊 About the Model"])
+    tab1, tab2 = st.tabs([" Make Prediction", " About the Model"])
 
     with tab1:
         col1, col2 = st.columns([2, 1])
 
         with col1:
-            st.header("📝 Enter Your Developer Profile")
+            st.header(" Enter Your Developer Profile")
 
             # Skills Selection Section
-            st.subheader("💻 Technical Skills - Select Your Skills")
+            st.subheader(" Technical Skills - Select Your Skills")
 
             # Create tabs for each skill family
-            tab_prog, tab_web, tab_db, tab_cloud = st.tabs(["Programming", "Web Tech", "Database", "Cloud/DevOps"])
+            tab_prog, tab_web, tab_db, tab_cloud = st.tabs(
+                ["Programming", "Web Tech", "Database", "Cloud/DevOps"])
 
             selected_skills = []
 
             with tab_prog:
-                #st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+                # st.markdown('<div class="skill-category">', unsafe_allow_html=True)
                 st.write("**💻 Programming Languages & Frameworks**")
-                #st.markdown('</div>', unsafe_allow_html=True)
+                # st.markdown('</div>', unsafe_allow_html=True)
                 prog_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['Programming']):
                     with prog_cols[i % 3]:
@@ -1131,20 +1435,20 @@ def main():
                 scores, binary_flags = calculate_skill_scores(selected_skills)
                 derived = calculate_derived_features(binary_flags)
 
-                st.markdown("### 📊 Your Skill Profile")
+                st.markdown("###  Your Skill Profile")
                 score_cols = st.columns(4)
                 with score_cols[0]:
                     st.metric("Programming", f"{scores['Programming_Score']:.1f}%",
-                             f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Programming']])}/{len(SKILL_FAMILIES['Programming'])}")
+                              f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Programming']])}/{len(SKILL_FAMILIES['Programming'])}")
                 with score_cols[1]:
                     st.metric("Web Tech", f"{scores['Web_Score']:.1f}%",
-                             f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Web']])}/{len(SKILL_FAMILIES['Web'])}")
+                              f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Web']])}/{len(SKILL_FAMILIES['Web'])}")
                 with score_cols[2]:
                     st.metric("Database", f"{scores['Database_Score']:.1f}%",
-                             f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Database']])}/{len(SKILL_FAMILIES['Database'])}")
+                              f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Database']])}/{len(SKILL_FAMILIES['Database'])}")
                 with score_cols[3]:
                     st.metric("Cloud/DevOps", f"{scores['CloudDevOps_Score']:.1f}%",
-                             f"{len([s for s in selected_skills if s in SKILL_FAMILIES['CloudDevOps']])}/{len(SKILL_FAMILIES['CloudDevOps'])}")
+                              f"{len([s for s in selected_skills if s in SKILL_FAMILIES['CloudDevOps']])}/{len(SKILL_FAMILIES['CloudDevOps'])}")
 
                 # Show special indicators with better styling
                 if derived['Is_FullStack']:
@@ -1158,7 +1462,7 @@ def main():
                 st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #cce7ff 0%, #b3d7ff 100%);
                            border-left: 4px solid #007bff; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                    <strong style="color: #004085;">🎯 Skill Breadth: {derived['Skill_Breadth']} out of 4 skill categories</strong>
+                    <strong style="color: #004085;"> Skill Breadth: {derived['Skill_Breadth']} out of 4 skill categories</strong>
                 </div>
                 """, unsafe_allow_html=True)
             else:
@@ -1170,10 +1474,10 @@ def main():
                 """, unsafe_allow_html=True)
 
             # Demographics Section with improved layout
-            st.subheader("👤 Personal Information")
+            st.subheader(" Personal Information")
 
             # Age Section
-            st.markdown("#### 📅 Age")
+            st.markdown("####  Age")
             age = st.number_input(
                 "Enter your age",
                 min_value=16,
@@ -1186,7 +1490,7 @@ def main():
             st.markdown("<br>", unsafe_allow_html=True)
 
             # Gender Section - Simple Layout
-            st.markdown("#### 👥 Gender")
+            st.markdown("####  Gender")
             gender = st.selectbox(
                 "Select your gender:",
                 ["Man", "Woman", "NonBinary"],
@@ -1196,7 +1500,7 @@ def main():
 
             # Professional Section with better spacing
             st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader("💼 Professional Background")
+            st.subheader(" Professional Background")
 
             # Calculate computer skills automatically from selected skills
             total_selected_skills = len(selected_skills)
@@ -1204,10 +1508,14 @@ def main():
             # Display computer skills as calculated value (not editable)
             if total_selected_skills > 0:
                 # Calculate breakdown for display
-                prog_selected = len([s for s in selected_skills if s in SKILL_FAMILIES['Programming']])
-                web_selected = len([s for s in selected_skills if s in SKILL_FAMILIES['Web']])
-                db_selected = len([s for s in selected_skills if s in SKILL_FAMILIES['Database']])
-                cloud_selected = len([s for s in selected_skills if s in SKILL_FAMILIES['CloudDevOps']])
+                prog_selected = len(
+                    [s for s in selected_skills if s in SKILL_FAMILIES['Programming']])
+                web_selected = len(
+                    [s for s in selected_skills if s in SKILL_FAMILIES['Web']])
+                db_selected = len(
+                    [s for s in selected_skills if s in SKILL_FAMILIES['Database']])
+                cloud_selected = len(
+                    [s for s in selected_skills if s in SKILL_FAMILIES['CloudDevOps']])
 
                 st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
@@ -1229,7 +1537,7 @@ def main():
                 """, unsafe_allow_html=True)
 
             # Education Level Section - Simple Layout
-            st.markdown("#### 🎓 Education Level")
+            st.markdown("####  Education Level")
 
             education_options = [
                 'No Higher Education',
@@ -1256,34 +1564,40 @@ def main():
             education_level = education_mapping[education_display]
 
             # Experience and Background
-            st.subheader("🎯 Experience & Background")
+            st.subheader(" Experience & Background")
             col1_exp, col2_exp = st.columns(2)
             with col1_exp:
-                is_developer = st.checkbox("I am a professional developer", value=True)
-                prof_experience = st.checkbox("I have professional coding experience", value=True)
+                is_developer = st.checkbox(
+                    "I am a professional developer", value=True)
+                prof_experience = st.checkbox(
+                    "I have professional coding experience", value=True)
             with col2_exp:
                 mental_health = st.checkbox("I have mental health concerns")
                 accessibility = st.checkbox("I have accessibility needs")
 
-            salary_info = st.checkbox("I'm willing to share salary information")
+            salary_info = st.checkbox(
+                "I'm willing to share salary information")
 
             # Prediction Button (only show if skills are selected)
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-divider"></div>',
+                        unsafe_allow_html=True)
             if not selected_skills:
                 st.markdown("""
                 <div style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
                            border-left: 4px solid #ffc107; padding: 1rem; border-radius: 8px; margin: 1rem 0; text-align: center;">
-                    <strong style="color: #856404;">⚠️ Please select at least one technical skill above to enable prediction</strong>
+                    <strong style="color: #856404;"> Please select at least one technical skill above to enable prediction</strong>
                 </div>
                 """, unsafe_allow_html=True)
-                st.button("🔮 Predict Employment Probability", disabled=True, use_container_width=True)
-            elif st.button("🔮 Predict Employment Probability", type="primary", use_container_width=True):
+                st.button(" Predict Employment Probability",
+                          disabled=True, use_container_width=True)
+            elif st.button(" Predict Employment Probability", type="primary", use_container_width=True):
                 user_inputs = {
                     'selected_skills': selected_skills,
                     'age': age,
                     'gender': gender,
-                    'computer_skills': len(selected_skills),  # Auto-calculated from selected skills
+                    # Auto-calculated from selected skills
+                    'computer_skills': len(selected_skills),
                     'education_level': education_level,
                     'is_developer': is_developer,
                     'prof_experience': prof_experience,
@@ -1294,19 +1608,22 @@ def main():
 
                 try:
                     # Create feature vector
-                    features = create_feature_vector(user_inputs, model_info['features'])
+                    features = create_feature_vector(
+                        user_inputs, model_info['features'])
 
                     # Calculate scores for internal use
                     skill_count = len(user_inputs['selected_skills'])
-                    scores, binary_flags = calculate_skill_scores(user_inputs['selected_skills'])
+                    scores, binary_flags = calculate_skill_scores(
+                        user_inputs['selected_skills'])
                     derived = calculate_derived_features(binary_flags)
 
                     # Show brief skill summary
                     if skill_count < 3 and not user_inputs['prof_experience']:
-                        st.warning("⚠️ **Note:** Limited skills and no professional experience may impact employability.")
+                        st.warning(
+                            " **Note:** Limited skills and no professional experience may impact employability.")
 
                     # Make prediction with reality check
-                    raw_prediction = model.predict(features)[0]
+                    # Use probability from classifier
                     raw_probability = model.predict_proba(features)[0][1]
 
                     # Apply reality check (internal - no display)
@@ -1332,8 +1649,10 @@ def main():
 
                 except Exception as e:
                     st.error(f"Prediction error: {str(e)}")
-                    st.text(f"Debug: Features shape: {features.shape if 'features' in locals() else 'Not created'}")
-                    st.text(f"Debug: Model features expected: {len(model_info['features']) if model_info else 'Unknown'}")
+                    st.text(
+                        f"Debug: Features shape: {features.shape if 'features' in locals() else 'Not created'}")
+                    st.text(
+                        f"Debug: Model features expected: {len(model_info['features']) if model_info else 'Unknown'}")
 
         # Display results if prediction was made
         with col2:
@@ -1342,13 +1661,13 @@ def main():
                 probability = st.session_state['probability']
                 user_inputs = st.session_state['user_inputs']
 
-                st.header("🎯 Prediction Result")
+                st.header(" Prediction Result")
 
                 # Result box with improved styling
                 if prediction == 1:
                     st.markdown(f"""
                     <div class="prediction-box employed">
-                        <h2>🎉 High Employment Probability</h2>
+                        <h2> High Employment Probability</h2>
                         <h3>Success Rate: {probability:.1%}</h3>
                         <p style="font-size: 1.1rem; margin-top: 1rem;">Your technical profile shows strong employment potential!</p>
                     </div>
@@ -1356,7 +1675,7 @@ def main():
                 else:
                     st.markdown(f"""
                     <div class="prediction-box unemployed">
-                        <h2>📈 Room for Improvement</h2>
+                        <h2> Room for Improvement</h2>
                         <h3>Current Probability: {probability:.1%}</h3>
                         <p style="font-size: 1.1rem; margin-top: 1rem;">Consider expanding your technical skillset for better opportunities.</p>
                     </div>
@@ -1364,12 +1683,13 @@ def main():
 
                 # Modern confidence gauge
                 fig = go.Figure(go.Indicator(
-                    mode = "gauge+number",
-                    value = probability * 100,
-                    domain = {'x': [0, 1], 'y': [0, 1]},
-                    title = {'text': "Employment Probability", 'font': {'size': 16, 'color': '#2E86AB'}},
-                    number = {'font': {'size': 24, 'color': '#2E86AB'}},
-                    gauge = {
+                    mode="gauge+number",
+                    value=probability * 100,
+                    domain={'x': [0, 1], 'y': [0, 1]},
+                    title={'text': "Employment Probability",
+                           'font': {'size': 16, 'color': '#2E86AB'}},
+                    number={'font': {'size': 24, 'color': '#2E86AB'}},
+                    gauge={
                         'axis': {'range': [None, 100], 'tickcolor': '#6C757D'},
                         'bar': {'color': "#2E86AB", 'thickness': 0.8},
                         'steps': [
@@ -1396,7 +1716,8 @@ def main():
                 st.plotly_chart(fig, use_container_width=True)
 
                 # Skills radar chart
-                scores, _ = calculate_skill_scores(user_inputs['selected_skills'])
+                scores, _ = calculate_skill_scores(
+                    user_inputs['selected_skills'])
                 skills_data = {
                     'Programming': scores['Programming_Score'],
                     'Web Tech': scores['Web_Score'],
@@ -1429,7 +1750,8 @@ def main():
                         bgcolor='rgba(0,0,0,0)'
                     ),
                     showlegend=False,
-                    title=dict(text="Skills Profile", x=0.5, font=dict(size=16, color='#2E86AB')),
+                    title=dict(text="Skills Profile", x=0.5,
+                               font=dict(size=16, color='#2E86AB')),
                     height=280,
                     margin=dict(l=20, r=20, t=50, b=20),
                     paper_bgcolor='rgba(0,0,0,0)',
@@ -1439,11 +1761,41 @@ def main():
                 st.plotly_chart(fig_radar, use_container_width=True)
 
                 # Recommendations
-                st.subheader("💡 Recommendations")
+                st.subheader(" Recommendations")
                 recommendations = get_recommendations(probability, user_inputs)
                 for rec in recommendations:
                     st.write(f"• {rec}")
 
+                # PDF download
+                st.markdown("<br>", unsafe_allow_html=True)
+                if REPORTLAB_AVAILABLE:
+                    # Recompute scores/derived to ensure in-scope
+                    scores, binary_flags = calculate_skill_scores(
+                        user_inputs['selected_skills'])
+                    derived = calculate_derived_features(binary_flags)
+                    pdf_bytes = create_pdf_report(
+                        user_inputs=user_inputs,
+                        probability=probability,
+                        raw_probability=st.session_state.get(
+                            'raw_probability', probability),
+                        prediction=prediction,
+                        scores=scores,
+                        derived=derived,
+                        recommendations=recommendations,
+                        model_info=st.session_state.get(
+                            'model_info', {}) if 'model_info' in st.session_state else model_info,
+                    )
+                    filename = f"PredSeeker_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                    st.download_button(
+                        label="⬇️ Download PDF Report",
+                        data=pdf_bytes,
+                        file_name=filename,
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
+                else:
+                    st.info(
+                        "To enable PDF download, install ReportLab: pip install reportlab")
 
     with tab2:
         st.header("📊 About the Employment Prediction Model")
@@ -1451,7 +1803,7 @@ def main():
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("🎯 How It Works")
+            st.subheader(" How It Works")
             st.write("""
             This AI model predicts developer employment probability using:
 
@@ -1463,7 +1815,7 @@ def main():
             The model analyzes your technical skills, professional background, and demographic information to provide employment insights.
             """)
 
-            st.subheader("📈 Key Features")
+            st.subheader(" Key Features")
             st.write("""
             • **Skill Scores:** Programming, Web, Database, Cloud/DevOps
             • **Derived Metrics:** Skill breadth, full-stack capability
@@ -1472,7 +1824,7 @@ def main():
             """)
 
         with col2:
-            st.subheader("🏆 Model Performance")
+            st.subheader(" Model Performance")
 
             # Performance metrics
             metrics_data = {
@@ -1503,13 +1855,15 @@ def main():
                 plot_bgcolor='rgba(0,0,0,0)',
                 margin=dict(l=20, r=20, t=50, b=20),
                 font={'family': 'Arial, sans-serif'},
-                xaxis=dict(gridcolor='#E9ECEF', tickfont=dict(color='#6C757D')),
+                xaxis=dict(gridcolor='#E9ECEF',
+                           tickfont=dict(color='#6C757D')),
                 yaxis=dict(gridcolor='#E9ECEF', tickfont=dict(color='#6C757D'))
             )
-            fig_metrics.update_traces(textposition='outside', textfont=dict(color='#495057'))
+            fig_metrics.update_traces(
+                textposition='outside', textfont=dict(color='#495057'))
             st.plotly_chart(fig_metrics, use_container_width=True)
 
-            st.subheader("⚠️ Limitations")
+            st.subheader(" Limitations")
             st.write("""
             • Predictions are probabilistic, not guarantees
             • Based on survey data from specific time period
@@ -1522,11 +1876,12 @@ def main():
     st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="text-align: center; color: #6C757D; padding: 30px; background-color: #f8f9fa; border-radius: 10px; margin-top: 2rem;">
-        <p style="font-size: 1.2rem; margin-bottom: 1rem;"><strong>🎯 PredSeeker</strong> - AI-Powered Developer Employment Prediction</p>
-        <p style="margin-bottom: 0.5rem;">Built with ❤️ using Streamlit • Powered by XGBoost ML Algorithm</p>
+        <p style="font-size: 1.2rem; margin-bottom: 1rem;"><strong> PredSeeker</strong> - AI-Powered Developer Employment Prediction</p>
+        <p style="margin-bottom: 0.5rem;">Built with  using Streamlit • Powered by XGBoost ML Algorithm</p>
         <p style="font-size: 0.9rem; color: #868e96; margin-bottom: 0;"><em>Disclaimer: This tool provides probabilistic predictions for guidance only. Individual results may vary.</em></p>
     </div>
     """, unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     main()
