@@ -1285,9 +1285,16 @@ def main():
     
     # Enhanced Sidebar
     with st.sidebar:
-        # Appearance toggle
-        appearance = st.selectbox("Appearance", ["Light", "Dark"], index=0)
+        # Fixed light mode only
+        appearance = "Light"
         if appearance == "Dark":
+            # Apply a dark-mode class for consistent targeting
+            st.markdown("""
+            <script>
+            const root = document.documentElement;
+            root.classList.add('dark-mode');
+            </script>
+            """, unsafe_allow_html=True)
             st.markdown("""
             <script>
             const r = document.documentElement;
@@ -1310,8 +1317,8 @@ def main():
 
                 /* Strong dark overrides so they win over earlier light styles */
                 [data-theme='dark'] .stApp, [data-theme='dark'] .stApp *,
-                [data-theme='dark'] [data-testid=\"stMarkdownContainer\"] *,
-                [data-theme='dark'] .stTabs [data-baseweb=\"tab-panel\"] * { color: var(--text) !important; }
+                [data-theme='dark'] [data-testid="stMarkdownContainer"] *,
+                [data-theme='dark'] .stTabs [data-baseweb="tab-panel"] * { color: var(--text) !important; }
 
                 [data-theme='dark'] .stApp { background: linear-gradient(135deg, var(--bg) 0%, var(--panel-2) 100%) !important; }
                 [data-theme='dark'] .main .block-container { background: rgba(15, 23, 42, 0.92) !important; box-shadow: 0 12px 30px rgba(0,0,0,0.6) !important; }
@@ -1330,24 +1337,24 @@ def main():
                 [data-theme='dark'] .info-primary { background: linear-gradient(135deg, rgba(59,130,246,0.18) 0%, rgba(59,130,246,0.12) 100%) !important; color: #bfdbfe !important; border-left-color: #60a5fa !important; }
 
                 /* Tabs */
-                [data-theme='dark'] .stTabs [data-baseweb=\"tab-list\"] { background: linear-gradient(135deg, #0b1220, #0f172a) !important; border: 1px solid var(--border) !important; box-shadow: none !important; }
-                [data-theme='dark'] .stTabs [data-baseweb=\"tab\"] { background: #0f172a !important; color: var(--text) !important; border: 1px solid transparent !important; }
-                [data-theme='dark'] .stTabs [data-baseweb=\"tab\"] * { color: var(--text) !important; }
-                [data-theme='dark'] .stTabs [data-baseweb=\"tab\"]:hover { border-color: var(--accent1) !important; background: #111827 !important; }
-                [data-theme='dark'] .stTabs [aria-selected=\"true\"] { background: linear-gradient(135deg, var(--accent1) 0%, var(--accent2) 100%) !important; color: #0b1020 !important; }
+                [data-theme='dark'] .stTabs [data-baseweb="tab-list"] { background: linear-gradient(135deg, #0b1220, #0f172a) !important; border: 1px solid var(--border) !important; box-shadow: none !important; }
+                [data-theme='dark'] .stTabs [data-baseweb="tab"] { background: #0f172a !important; color: var(--text) !important; border: 1px solid transparent !important; }
+                [data-theme='dark'] .stTabs [data-baseweb="tab"] * { color: var(--text) !important; }
+                [data-theme='dark'] .stTabs [data-baseweb="tab"]:hover { border-color: var(--accent1) !important; background: #111827 !important; }
+                [data-theme='dark'] .stTabs [aria-selected="true"] { background: linear-gradient(135deg, var(--accent1) 0%, var(--accent2) 100%) !important; color: #0b1020 !important; }
 
                 /* Inputs */
                 [data-theme='dark'] .stSelectbox > div > div, [data-theme='dark'] .stNumberInput > div > div { background: #0f172a !important; border: 2px solid #334155 !important; box-shadow: none !important; }
-                [data-theme='dark'] .stSelectbox [data-baseweb=\"select\"] { background: transparent !important; }
-                [data-theme='dark'] .stSelectbox [role=\"listbox\"] { background: #0f172a !important; border: 1px solid #334155 !important; }
-                [data-theme='dark'] .stSelectbox [role=\"option\"] { background: transparent !important; color: var(--text) !important; }
-                [data-theme='dark'] .stSelectbox [role=\"option\"]:hover { background: #111827 !important; }
+                [data-theme='dark'] .stSelectbox [data-baseweb="select"] { background: transparent !important; }
+                [data-theme='dark'] .stSelectbox [role="listbox"] { background: #0f172a !important; border: 1px solid #334155 !important; }
+                [data-theme='dark'] .stSelectbox [role="option"] { background: transparent !important; color: var(--text) !important; }
+                [data-theme='dark'] .stSelectbox [role="option"]:hover { background: #111827 !important; }
                 [data-theme='dark'] .stNumberInput input { background: transparent !important; color: var(--text) !important; }
-                [data-theme='dark'] .stCheckbox input[type=\"checkbox\"] { border-color: #64748b !important; background: #0f172a !important; }
+                [data-theme='dark'] .stCheckbox input[type="checkbox"] { border-color: #64748b !important; background: #0f172a !important; }
                 [data-theme='dark'] .stCheckbox > label, [data-theme='dark'] .stCheckbox span, [data-theme='dark'] .stCheckbox > label > div { color: var(--text) !important; }
 
                 /* Sidebar */
-                [data-theme='dark'] [data-testid=\"stSidebar\"], [data-theme='dark'] .css-1d391kg { background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%) !important; border-right: 2px solid var(--border) !important; }
+                [data-theme='dark'] [data-testid="stSidebar"], [data-theme='dark'] .css-1d391kg { background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%) !important; border-right: 2px solid var(--border) !important; }
                 [data-theme='dark'] .sidebar-header { border-bottom-color: #334155 !important; }
                 [data-theme='dark'] .sidebar-section div[style*='color: #374151'] { color: var(--text) !important; }
 
@@ -1361,6 +1368,52 @@ def main():
 
                 /* Skill category card */
                 [data-theme='dark'] .skill-category { background: #0f172a !important; border-left-color: var(--accent1) !important; box-shadow: 0 3px 12px rgba(0,0,0,0.35) !important; }
+
+                /* Force all high-level containers to dark background */
+                [data-theme='dark'] body, 
+                [data-theme='dark'] .stApp,
+                [data-theme='dark'] [data-testid='stAppViewContainer'],
+                [data-theme='dark'] .main,
+                [data-theme='dark'] .block-container { background: #0b1220 !important; }
+
+                /* Remove light container around tabs */
+                [data-theme='dark'] .stTabs { background: transparent !important; }
+                [data-theme='dark'] .stTabs > div { background: transparent !important; }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+            # Extra high-specificity hard overrides (covers widgets that inject inline styles)
+            st.markdown(
+                """
+                <style>
+                .stApp, .stApp * { color: #e5e7eb !important; }
+                .main .block-container { background: #0f172a !important; }
+                section[data-testid="stSidebar"], .css-1d391kg { background: #0f172a !important; }
+                .stTabs [data-baseweb="tab-list"] { background: #0f172a !important; }
+                .stTabs [data-baseweb="tab"] { background: #111827 !important; color: #e5e7eb !important; }
+                .prediction-container, .chart-container, .sidebar-section, .info-box, .footer-section, .skill-category { background: #0f172a !important; border-color: rgba(255,255,255,0.08) !important; }
+                .stSelectbox > div > div, .stNumberInput > div > div { background: #0f172a !important; border-color: #334155 !important; }
+                .stSelectbox [role="listbox"] { background: #0f172a !important; border-color: #334155 !important; }
+                .stSelectbox [role="option"] { color: #e5e7eb !important; }
+                /* Fix inline light text within sidebar info blocks */
+                .sidebar-section div[style*='color: #374151'] { color: #e5e7eb !important; }
+                /* Force page background */
+                html, body, .stApp, [data-testid="stAppViewContainer"] { background: #0b1220 !important; }
+                .stTabs [data-baseweb="tab-panel"] { background: transparent !important; }
+                /* Nuke any inline white backgrounds Streamlit injects */
+                [data-theme='dark'] div[style*="background: rgb(255, 255, 255)"],
+                [data-theme='dark'] div[style*="background-color: rgb(255, 255, 255)"],
+                [data-theme='dark'] div[style*="background: #fff"],
+                [data-theme='dark'] div[style*="background-color: #fff"],
+                [data-theme='dark'] div[style*="background: white"],
+                [data-theme='dark'] div[style*="background-color: white"] {
+                    background: #0f172a !important;
+                }
+                /* All text becomes light in dark mode */
+                [data-theme='dark'] * { color: #e5e7eb !important; }
+                /* Borders and dividers */
+                [data-theme='dark'] hr, [data-theme='dark'] .stDivider, [data-theme='dark'] .stMarkdown hr { border-color: #334155 !important; color: #334155 !important; }
                 </style>
                 """,
                 unsafe_allow_html=True,
@@ -1368,8 +1421,7 @@ def main():
         else:
             st.markdown("""
             <script>
-            const r = document.documentElement;
-            r.setAttribute('data-theme','light');
+            const r = document.documentElement; r.setAttribute('data-theme','light'); r.classList.remove('dark-mode');
             </script>
             """, unsafe_allow_html=True)
         st.markdown("""
@@ -1799,19 +1851,189 @@ def main():
                 for i, rec in enumerate(recommendations, 1):
                     st.markdown(f"**{i}.** {rec}")
                 
-                # Downloadable report
-                report = {
-                    "prediction": "Employed" if prediction == 1 else "Not Employed",
-                    "probability": round(float(probability), 4),
-                    "raw_probability": round(float(st.session_state.get('raw_probability', probability)), 4),
-                    "timestamp": datetime.utcnow().isoformat() + 'Z',
-                    "inputs": user_inputs,
-                }
+                # Enhanced PDF report with attractive styling
+                from io import BytesIO
+                from reportlab.lib.pagesizes import A4
+                from reportlab.pdfgen import canvas
+                from reportlab.lib.colors import HexColor, black, white
+                from reportlab.lib.units import inch
+                from reportlab.lib import colors
+                
+                buffer = BytesIO()
+                c = canvas.Canvas(buffer, pagesize=A4)
+                width, height = A4
+                
+                # Color scheme
+                primary_color = HexColor('#667eea')
+                secondary_color = HexColor('#764ba2')
+                success_color = HexColor('#10b981')
+                warning_color = HexColor('#f59e0b')
+                text_color = HexColor('#1f2937')
+                light_gray = HexColor('#f8fafc')
+                
+                # Header with gradient effect
+                c.setFillColor(primary_color)
+                c.rect(0, height - 80, width, 80, fill=True, stroke=False)
+                
+                # Title
+                c.setFillColor(white)
+                c.setFont("Helvetica-Bold", 24)
+                c.drawCentredString(width/2, height - 35, "PredSeeker")
+                c.setFont("Helvetica", 14)
+                c.drawCentredString(width/2, height - 55, "AI-Powered Developer Employment Prediction Report")
+                
+                y = height - 120
+                
+                # Report info box
+                c.setFillColor(light_gray)
+                c.rect(40, y - 60, width - 80, 60, fill=True, stroke=True)
+                c.setFillColor(text_color)
+                c.setFont("Helvetica", 10)
+                c.drawString(50, y - 20, f"Generated: {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}")
+                c.drawString(50, y - 35, f"Report ID: PRED-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}")
+                c.drawString(50, y - 50, "Data Source: Stack Overflow Developer Survey")
+                
+                y -= 100
+                
+                # Prediction result with colored background
+                status = "EMPLOYED" if prediction == 1 else "NEEDS IMPROVEMENT"
+                status_color = success_color if prediction == 1 else warning_color
+                
+                c.setFillColor(status_color)
+                c.rect(40, y - 50, width - 80, 50, fill=True, stroke=False)
+                
+                c.setFillColor(white)
+                c.setFont("Helvetica-Bold", 20)
+                c.drawCentredString(width/2, y - 20, f"PREDICTION: {status}")
+                
+                c.setFont("Helvetica-Bold", 16)
+                prob_text = f"Employment Probability: {probability:.1%}"
+                c.drawCentredString(width/2, y - 40, prob_text)
+                
+                y -= 80
+                
+                # Skills analysis section
+                c.setFillColor(text_color)
+                c.setFont("Helvetica-Bold", 16)
+                c.drawString(40, y, "SKILLS ANALYSIS")
+                y -= 25
+                
+                scores, binary_flags = calculate_skill_scores(user_inputs['selected_skills'])
+                derived = calculate_derived_features(binary_flags)
+                
+                # Skills breakdown
+                skill_categories = [
+                    ("Programming Languages", scores['Programming_Score'], len([s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['Programming']])),
+                    ("Web Technologies", scores['Web_Score'], len([s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['Web']])),
+                    ("Database Systems", scores['Database_Score'], len([s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['Database']])),
+                    ("Cloud & DevOps", scores['CloudDevOps_Score'], len([s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['CloudDevOps']]))
+                ]
+                
+                for category, score, count in skill_categories:
+                    if y < 100:
+                        c.showPage()
+                        y = height - 50
+                    
+                    c.setFont("Helvetica-Bold", 12)
+                    c.drawString(50, y, f"{category}:")
+                    c.setFont("Helvetica", 11)
+                    c.drawString(50, y - 15, f"  • Score: {score:.1f}%")
+                    c.drawString(50, y - 30, f"  • Skills Count: {count}")
+                    
+                    # Progress bar
+                    bar_width = 200
+                    bar_height = 8
+                    c.setFillColor(HexColor('#e2e8f0'))
+                    c.rect(50, y - 45, bar_width, bar_height, fill=True, stroke=False)
+                    c.setFillColor(primary_color)
+                    c.rect(50, y - 45, bar_width * (score/100), bar_height, fill=True, stroke=False)
+                    
+                    y -= 70
+                
+                # Additional metrics
+                if y < 120:
+                    c.showPage()
+                    y = height - 50
+                
+                c.setFont("Helvetica-Bold", 16)
+                c.drawString(40, y, "ADDITIONAL METRICS")
+                y -= 25
+                
+                metrics = [
+                    ("Total Skills", len(user_inputs['selected_skills'])),
+                    ("Skill Breadth", f"{derived['Skill_Breadth']}/4 categories"),
+                    ("Full-Stack Developer", "Yes" if derived['Is_FullStack'] else "No"),
+                    ("Professional Experience", "Yes" if user_inputs['prof_experience'] else "No"),
+                    ("Developer Role", "Yes" if user_inputs['is_developer'] else "No")
+                ]
+                
+                for metric, value in metrics:
+                    if y < 60:
+                        c.showPage()
+                        y = height - 50
+                    c.setFont("Helvetica-Bold", 11)
+                    c.drawString(50, y, f"{metric}:")
+                    c.setFont("Helvetica", 11)
+                    c.drawString(50, y - 15, str(value))
+                    y -= 30
+                
+                # Recommendations section
+                if y < 150:
+                    c.showPage()
+                    y = height - 50
+                
+                c.setFont("Helvetica-Bold", 16)
+                c.drawString(40, y, "PERSONALIZED RECOMMENDATIONS")
+                y -= 25
+                
+                recommendations = get_recommendations(probability, user_inputs)
+                for i, rec in enumerate(recommendations, 1):
+                    if y < 60:
+                        c.showPage()
+                        y = height - 50
+                        c.setFont("Helvetica", 11)
+                    
+                    c.setFont("Helvetica-Bold", 11)
+                    c.drawString(50, y, f"{i}.")
+                    c.setFont("Helvetica", 11)
+                    # Wrap long text
+                    text = rec.replace('**', '').replace('*', '')
+                    if len(text) > 80:
+                        words = text.split()
+                        lines = []
+                        current_line = ""
+                        for word in words:
+                            if len(current_line + word) < 80:
+                                current_line += word + " "
+                            else:
+                                lines.append(current_line.strip())
+                                current_line = word + " "
+                        lines.append(current_line.strip())
+                        for line in lines:
+                            c.drawString(70, y, line)
+                            y -= 15
+                    else:
+                        c.drawString(70, y, text)
+                    y -= 20
+                
+                # Footer
+                c.showPage()
+                y = height - 50
+                c.setFillColor(primary_color)
+                c.rect(0, 0, width, 50, fill=True, stroke=False)
+                c.setFillColor(white)
+                c.setFont("Helvetica", 10)
+                c.drawCentredString(width/2, 20, "PredSeeker - AI-Powered Developer Employment Prediction")
+                c.drawCentredString(width/2, 8, "Disclaimer: This prediction is for guidance only. Individual results may vary.")
+                
+                c.save()
+                pdf_bytes = buffer.getvalue()
+                buffer.close()
                 st.download_button(
-                    label="Download Report (JSON)",
-                    data=json.dumps(report, indent=2),
-                    file_name="predseeker_report.json",
-                    mime="application/json",
+                    label="Download Report (PDF)",
+                    data=pdf_bytes,
+                    file_name="predseeker_report.pdf",
+                    mime="application/pdf",
                     use_container_width=True,
                 )
 
