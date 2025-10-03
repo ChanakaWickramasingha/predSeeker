@@ -1,21 +1,19 @@
-# Core Python libraries
-pandas>=1.5.0
-numpy>=1.21.0
-matplotlib>=3.5.0
-seaborn>=0.11.0
+# Core for Streamlit app
+streamlit==1.38.0
+joblib==1.4.2  # Critical for model loading
 
-# Machine Learning
-scikit-learn>=1.1.0
-scipy>=1.9.0
+# Data/ML (match your training env to avoid pickle errors)
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.1  # Pin to match training; common pickle culprit
+xgboost==2.1.1  # For your model
+imbalanced-learn==0.12.3  # If used for SMOTE
 
-# Jupyter notebooks
-jupyter>=1.0.0
-ipykernel>=6.15.0
+# Visualization & Reports
+plotly==5.24.1
+reportlab==4.2.2  # For PDF generation
 
-# Additional utilities
-plotly>=5.10.0
-wordcloud>=1.9.0
-
-# Optional: Advanced ML libraries
-# xgboost>=1.6.0
-# lightgbm>=3.3.0
+# Optional (from your old reqs, but keep if needed)
+matplotlib==3.9.2
+seaborn==0.13.2
+scipy==1.14.1
