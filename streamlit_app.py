@@ -1,385 +1,651 @@
 # streamlit_app.py
 import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
 import json
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import os
-from io import BytesIO
-import importlib.util
-
-# Optional PDF deps (defer actual import to usage site)
-try:
-    REPORTLAB_AVAILABLE = importlib.util.find_spec("reportlab") is not None
-except Exception:
-    REPORTLAB_AVAILABLE = False
 
 # Configure the page
 st.set_page_config(
     page_title="PredSeeker - Developer Employment Predictor",
-    page_icon="",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for modern clean UI with proper contrast
+# Enhanced CSS with better font family and improved spacing
 st.markdown("""
 <style>
+    /* Import professional fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+    /* Global font family and base styling */
+    html, body, [class*="css"] {
+        font-family: 'Inter', 'Segoe UI', 'Roboto', sans-serif !important;
+        color: #1f2937 !important;
+    }
+
+    /* Ensure all text elements have dark colors */
+    p, span, div, label {
+        color: #1f2937 !important;
+    }
+
+    .stMarkdown p {
+        color: #1f2937 !important;
+    }
+
     /* Main app styling */
     .stApp {
-        background-color: #ffffff;
-        color: #212529;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        color: #2c3e50;
+        min-height: 100vh;
     }
 
-    /* Top navigation bar - remove dark header */
-    .css-18e3th9, .css-1d391kg, header[data-testid="stHeader"] {
-        background-color: #ffffff !important;
-        border-bottom: 1px solid #dee2e6 !important;
+    /* Main container with compact spacing */
+    .main .block-container {
+        max-width: 1400px;
+        padding: 1.5rem 1rem;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        margin: 1rem auto;
     }
 
-    /* Hide Streamlit menu and footer */
+    /* Remove default Streamlit styling */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    header {visibility: hidden;}
     .stDeployButton {display: none;}
 
-    /* App header container */
-    .block-container {
-        padding-top: 2rem;
-    }
-
-    /* Override Streamlit's default text colors */
-    .stMarkdown, .stText, p, div, span {
-        color: #212529 !important;
-    }
-
-    /* Header styling */
+    /* Enhanced header styling */
     .main-header {
-        font-size: 3.5rem;
-        color: #2E86AB !important;
+        font-family: 'Poppins', sans-serif !important;
+        font-size: 3rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
         text-align: center;
-        margin-bottom: 2rem;
-        font-weight: 700;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 0.5rem;
+        letter-spacing: -2px;
+        line-height: 1.1;
     }
 
     .sub-header {
-        font-size: 1.5rem;
-        color: #495057 !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.2rem;
+        color: #64748b;
         text-align: center;
-        margin-bottom: 3rem;
+        margin-bottom: 2rem;
         font-weight: 400;
+        letter-spacing: 0.5px;
     }
 
-    /* Prediction result boxes */
-    .prediction-box {
-        padding: 2rem;
-        border-radius: 15px;
+    /* Enhanced prediction result area */
+    .prediction-container {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border-radius: 16px;
+        padding: 1.5rem 1rem;
         margin: 1.5rem 0;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .prediction-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        border-radius: 24px 24px 0 0;
+    }
+
+    .prediction-result-header {
+        font-family: 'Poppins', sans-serif !important;
+        font-size: 2rem;
+        font-weight: 700;
         text-align: center;
+        margin-bottom: 1rem;
+        color: #2c3e50;
+    }
+
+    .prediction-box {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        border-radius: 16px;
+        padding: 1.5rem 1rem;
+        margin: 1rem 0;
+        text-align: center;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+        border: 2px solid transparent;
+        position: relative;
+        transition: all 0.3s ease;
+    }
+
+    .prediction-box:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
     }
 
     .employed {
-        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-        border: 3px solid #28a745;
-        color: #155724 !important;
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        border-color: #10b981;
+        color: #064e3b !important;
     }
 
     .unemployed {
-        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-        border: 3px solid #dc3545;
-        color: #721c24 !important;
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        border-color: #ef4444;
+        color: #7f1d1d !important;
     }
 
     .prediction-box h2 {
-        margin-bottom: 1rem;
-        font-size: 2rem;
-        font-weight: 600;
+        font-family: 'Poppins', sans-serif !important;
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
         color: inherit !important;
     }
 
     .prediction-box h3 {
-        margin-bottom: 0.5rem;
-        font-size: 1.5rem;
-        font-weight: 500;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
         color: inherit !important;
     }
 
     .prediction-box p {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.2rem;
+        font-weight: 400;
+        line-height: 1.6;
         color: inherit !important;
-        font-size: 1.1rem;
+        margin-top: 1rem;
     }
 
-    /* Skill category styling */
-    .skill-category {
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border-left: 4px solid #007bff;
+    /* Enhanced chart containers */
+    .chart-container {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(0, 0, 0, 0.05);
     }
 
-    /* Sidebar styling - Fix dark background issue */
-    .css-1d391kg, .css-1cypcdb, .css-17eq0hr, .css-1544g2n {
-        background-color: #f8f9fa !important;
-    }
-
-    /* Sidebar content styling */
-    .css-1d391kg .stMarkdown, .css-1d391kg .stMarkdown p, .css-1d391kg .stMarkdown h1,
-    .css-1d391kg .stMarkdown h2, .css-1d391kg .stMarkdown h3, .css-1d391kg .stMarkdown li {
-        color: #212529 !important;
-    }
-
-    /* Sidebar metric styling */
-    .css-1d391kg .metric-container {
-        background-color: #ffffff !important;
-        border: 1px solid #dee2e6 !important;
-        border-radius: 8px !important;
-        padding: 0.75rem !important;
-        margin: 0.5rem 0 !important;
-    }
-
-    /* Sidebar header styling */
-    .css-1d391kg h1, .css-1d391kg h2, .css-1d391kg h3 {
-        color: #2E86AB !important;
-        border-bottom: 2px solid #dee2e6;
-        padding-bottom: 0.5rem;
+    .chart-title {
+        font-family: 'Poppins', sans-serif !important;
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: #2c3e50;
+        text-align: center;
         margin-bottom: 1rem;
     }
 
-    /* Streamlit component overrides - Enhanced */
-    .stSelectbox label, .stCheckbox label, .stSlider label, .stNumberInput label, .stRadio label {
-        color: #212529 !important;
-        font-weight: 600 !important;
-        font-size: 1rem !important;
-        margin-bottom: 0.5rem !important;
-        text-shadow: none !important;
+    /* Enhanced sidebar styling */
+    .css-1d391kg, section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+        border-right: 2px solid #e2e8f0 !important;
+        padding: 2rem 1rem !important;
     }
 
-    /* Form section labels */
-    h2, h3, .css-10trblm {
-        color: #2E86AB !important;
-        font-weight: 600 !important;
-        margin-top: 2rem !important;
-        margin-bottom: 1rem !important;
-        border-bottom: 2px solid #dee2e6 !important;
-        padding-bottom: 0.5rem !important;
-    }
-
-    .stMetric label {
-        color: #495057 !important;
-    }
-
-    .stMetric [data-testid="metric-container"] {
-        background-color: #ffffff;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
+    .sidebar-section {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border-radius: 12px;
         padding: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin: 1rem 0;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(0, 0, 0, 0.05);
     }
 
-    /* Success/Warning/Info boxes */
-    .stSuccess {
-        background-color: #d1ecf1 !important;
-        border: 2px solid #17a2b8 !important;
-        border-radius: 8px;
-        color: #0c5460 !important;
+    .sidebar-header {
+        font-family: 'Poppins', sans-serif !important;
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 0.5rem;
     }
 
-    .stSuccess .stMarkdown p {
-        color: #0c5460 !important;
-    }
-
-    .stWarning {
-        background-color: #fff3cd !important;
-        border: 2px solid #ffc107 !important;
-        border-radius: 8px;
-        color: #856404 !important;
-    }
-
-    .stWarning .stMarkdown p {
-        color: #856404 !important;
-    }
-
-    .stInfo {
-        background-color: #cce7ff !important;
-        border: 2px solid #007bff !important;
-        border-radius: 8px;
-        color: #004085 !important;
-    }
-
-    .stInfo .stMarkdown p {
-        color: #004085 !important;
-    }
-
-    /* Button styling - Enhanced */
+    /* Enhanced button styling */
     .stButton > button {
-        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+        font-family: 'Inter', sans-serif !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
-        border-radius: 12px !important;
         border: none !important;
-        padding: 0.75rem 2rem !important;
+        border-radius: 12px !important;
+        padding: 0.7rem 2rem !important;
         font-size: 1.1rem !important;
         font-weight: 600 !important;
-        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3) !important;
+        letter-spacing: 0.3px !important;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3) !important;
         transition: all 0.3s ease !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        text-transform: none !important;
+        min-height: 45px !important;
     }
 
     .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4) !important;
-        background: linear-gradient(135deg, #0056b3 0%, #003d82 100%) !important;
-    }
-
-    .stButton > button:active {
-        transform: translateY(0px) !important;
+        transform: translateY(-3px) !important;
+        box-shadow: 0 12px 35px rgba(102, 126, 234, 0.4) !important;
+        background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%) !important;
     }
 
     .stButton > button:disabled {
-        background: #6c757d !important;
-        color: white !important;
+        background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%) !important;
         opacity: 0.6 !important;
-        cursor: not-allowed !important;
         transform: none !important;
         box-shadow: none !important;
     }
 
-    /* Download button styling */
-    .stDownloadButton > button {
-        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
-        color: #ffffff !important;
-        border-radius: 12px !important;
-        border: none !important;
-        padding: 0.75rem 2rem !important;
-        font-size: 1.1rem !important;
-        font-weight: 600 !important;
-        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3) !important;
-        transition: all 0.3s ease !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .stDownloadButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4) !important;
-        background: linear-gradient(135deg, #0056b3 0%, #003d82 100%) !important;
-    }
-
-    .stDownloadButton > button:active {
-        transform: translateY(0px) !important;
-    }
-
-    .stDownloadButton > button:disabled {
-        background: #6c757d !important;
-        color: white !important;
-        opacity: 0.6 !important;
-        cursor: not-allowed !important;
-        transform: none !important;
-        box-shadow: none !important;
-    }
-
-    /* Tab styling - Enhanced */
+    /* Enhanced tab styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 12px;
-        background-color: #f8f9fa;
+        gap: 0.5rem;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
         padding: 0.5rem;
-        border-radius: 12px;
-        border: 1px solid #dee2e6;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 1rem;
     }
 
     .stTabs [data-baseweb="tab"] {
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
-        border-radius: 10px !important;
-        color: #495057 !important;
+        font-family: 'Inter', sans-serif !important;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        border-radius: 12px !important;
+        color: #1f2937 !important;
         font-weight: 600 !important;
-        border: 2px solid #dee2e6 !important;
-        padding: 0.75rem 1.5rem !important;
+        font-size: 1rem !important;
+        border: 1px solid transparent !important;
+        padding: 0.6rem 1.2rem !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+        min-height: 40px !important;
+    }
+
+    .stTabs [data-baseweb="tab"] * {
+        color: #1f2937 !important;
     }
 
     .stTabs [data-baseweb="tab"]:hover {
-        border-color: #007bff !important;
-        background: linear-gradient(135deg, #e7f3ff 0%, #cce7ff 100%) !important;
-        transform: translateY(-1px) !important;
-        box-shadow: 0 2px 6px rgba(0,123,255,0.2) !important;
+        border-color: #667eea !important;
+        background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.15) !important;
     }
 
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
-        border-color: #0056b3 !important;
-        box-shadow: 0 3px 8px rgba(0,123,255,0.3) !important;
+        border-color: #5a67d8 !important;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3) !important;
     }
 
-    /* Subheader styling */
-    .css-10trblm {
-        color: #212529 !important;
+    /* Section headers */
+    h1, h2, h3 {
+        font-family: 'Poppins', sans-serif !important;
+        color: #2c3e50 !important;
+        font-weight: 600 !important;
+        margin-top: 1.5rem !important;
+        margin-bottom: 1rem !important;
+        line-height: 1.3 !important;
     }
 
-    /* Checkbox styling - Fixed for proper visibility */
-    .stCheckbox {
-        margin-bottom: 0.5rem;
+    h1 {
+        font-size: 2.2rem !important;
+        border-bottom: 2px solid #667eea !important;
+        padding-bottom: 0.5rem !important;
     }
 
-    /* Checkbox container */
-    .stCheckbox > label {
-        color: #212529 !important;
+    h2 {
+        font-size: 1.8rem !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    h3 {
+        font-size: 1.4rem !important;
+        color: #475569 !important;
+    }
+
+    /* Enhanced form styling */
+    .stSelectbox, .stNumberInput, .stCheckbox {
+        font-family: 'Inter', sans-serif !important;
+        margin-bottom: 0.8rem !important;
+        color: #1f2937 !important;
+    }
+
+    .stSelectbox label, .stNumberInput label, .stCheckbox label {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        color: #1f2937 !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    /* Ensure all form text is dark */
+    .stSelectbox *, .stNumberInput *, .stCheckbox * {
+        color: #1f2937 !important;
+    }
+
+    /* Target the outer selectbox container */
+    .stSelectbox > div {
         background: transparent !important;
-        padding: 0.6rem 1rem !important;
-        border-radius: 0px !important;
-        border: none !important;
-        margin-bottom: 0.4rem !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Target the actual selectbox element (remove nested card) */
+    .stSelectbox > div > div {
+        background: #ffffff !important;
+        border: 2px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.1rem !important;
         font-weight: 500 !important;
+        color: #1f2937 !important;
+        padding: 0.8rem 1.2rem !important;
+        min-height: 50px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important;
         transition: all 0.3s ease !important;
-        cursor: pointer !important;
-        box-shadow: none !important;
+        position: relative !important;
         display: flex !important;
         align-items: center !important;
     }
 
-    /* Checkbox input - Force white background when unchecked */
-    .stCheckbox input[type="checkbox"] {
-        appearance: none !important;
-        -webkit-appearance: none !important;
-        -moz-appearance: none !important;
-        width: 18px !important;
-        height: 18px !important;
-        border: 2px solid #6c757d !important;
-        border-radius: 3px !important;
-        background-color: #ffffff !important;
+    /* Remove any inner card styling */
+    .stSelectbox > div > div > div {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .stSelectbox > div > div:hover {
         background: #ffffff !important;
-        margin-right: 0.5rem !important;
-        position: relative !important;
-        cursor: pointer !important;
+        border-color: #667eea !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.15) !important;
+    }
+
+    .stSelectbox > div > div:focus-within {
+        background: #ffffff !important;
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+    }
+
+    /* Fix selected value display in selectbox */
+    .stSelectbox [data-baseweb="select"] {
+        background: #ffffff !important;
+        color: #1f2937 !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+    }
+
+    .stSelectbox [data-baseweb="select"] > div {
+        color: #1f2937 !important;
+        background: #ffffff !important;
+        opacity: 1 !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+        line-height: 1.4 !important;
+    }
+
+    .stSelectbox [data-baseweb="select"] span {
+        color: #1f2937 !important;
+        opacity: 1 !important;
+        font-weight: 500 !important;
+        padding-left: 0.2rem !important;
+        margin-left: 0.2rem !important;
+    }
+
+    .stSelectbox [data-baseweb="select"] div[data-baseweb="input"] {
+        color: #1f2937 !important;
+        background: #ffffff !important;
+        opacity: 1 !important;
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+        line-height: 1.4 !important;
+        padding: 0 0 0 0.5rem !important;
+        margin: 0 !important;
+        border: none !important;
+        width: 100% !important;
+    }
+
+    .stSelectbox [data-baseweb="select"] div[data-baseweb="input"] > div {
+        color: #1f2937 !important;
+        background: #ffffff !important;
+        opacity: 1 !important;
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+        line-height: 1.4 !important;
+        padding: 0 0 0 0.3rem !important;
+        margin: 0 !important;
+        border: none !important;
+    }
+
+    .stSelectbox span {
+        color: #000000 !important;
+        opacity: 1 !important;
+    }
+
+    .stSelectbox input {
+        color: #000000 !important;
+        background: #ffffff !important;
+        opacity: 1 !important;
+    }
+
+    .stSelectbox > div > div:hover {
+        border-color: #667eea !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.15) !important;
+    }
+
+    /* Simple dropdown menu */
+    .stSelectbox [role="listbox"] {
+        background: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 6px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+        padding: 0.25rem 0 !important;
+    }
+
+    .stSelectbox [role="option"] {
+        background: #ffffff !important;
+        color: #1f2937 !important;
+        padding: 0.5rem 1rem !important;
+        font-size: 1rem !important;
+    }
+
+    .stSelectbox [role="option"]:hover {
+        background: #f3f4f6 !important;
+        color: #1f2937 !important;
+    }
+
+    .stSelectbox [role="option"][aria-selected="true"] {
+        background: #3b82f6 !important;
+        color: #ffffff !important;
+    }
+
+    /* Universal selectbox text visibility */
+    .stSelectbox * {
+        color: #1f2937 !important;
+        opacity: 1 !important;
+    }
+
+    /* Additional specific targeting for selected value */
+    .stSelectbox div[data-baseweb="select"] div {
+        color: #1f2937 !important;
+        opacity: 1 !important;
+    }
+
+    /* Ensure text in input area is visible */
+    .stSelectbox > div > div input {
+        color: #1f2937 !important;
+        opacity: 1 !important;
+        -webkit-text-fill-color: #1f2937 !important;
+    }
+
+    /* Target the actual displayed value */
+    .stSelectbox div[role="combobox"] {
+        color: #1f2937 !important;
+        opacity: 1 !important;
+    }
+
+    .stSelectbox div[role="combobox"] * {
+        color: #1f2937 !important;
+        opacity: 1 !important;
+    }
+
+    /* Enhanced number input styling */
+    .stNumberInput > div > div {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        border: 2px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+        color: #1f2937 !important;
+        padding: 0.8rem 1.2rem !important;
+        min-height: 50px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important;
+        border: 1px solid rgba(0, 0, 0, 0.05) !important;
         transition: all 0.3s ease !important;
+    }
+
+    /* Number input field */
+    .stNumberInput input {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        color: #1f2937 !important;
+        border: none !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+    }
+
+    .stNumberInput input:focus {
+        background-color: #ffffff !important;
+        color: #1f2937 !important;
         outline: none !important;
     }
 
-    /* Force unchecked state to be white with border */
-    .stCheckbox input[type="checkbox"]:not(:checked) {
+    /* Number input container overrides */
+    .stNumberInput [data-baseweb="input"] {
         background-color: #ffffff !important;
-        background: #ffffff !important;
-        background-image: none !important;
-        border: 2px solid #6c757d !important;
+        color: #1f2937 !important;
     }
 
-    /* Checkbox checked state - Blue background with white checkmark */
+    .stNumberInput [data-baseweb="input"] > div {
+        background-color: #ffffff !important;
+        color: #1f2937 !important;
+    }
+
+    /* Fix number input spinner buttons (increase/decrease) */
+    .stNumberInput button {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        color: #1f2937 !important;
+        border: none !important;
+    }
+
+    .stNumberInput button:hover {
+        background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%) !important;
+        color: #1f2937 !important;
+    }
+
+    /* Spinner button container */
+    .stNumberInput [data-baseweb="spinner"] {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+    }
+
+    .stNumberInput [data-baseweb="spinner"] button {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        color: #1f2937 !important;
+        border-left: 1px solid #e2e8f0 !important;
+    }
+
+    .stNumberInput [data-baseweb="spinner"] button:hover {
+        background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%) !important;
+        color: #1f2937 !important;
+    }
+
+    /* Spinner icons */
+    .stNumberInput [data-baseweb="spinner"] svg {
+        fill: #1f2937 !important;
+        color: #1f2937 !important;
+    }
+
+    .stNumberInput > div > div:hover {
+        border-color: #667eea !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.15) !important;
+    }
+
+    /* Enhanced checkbox styling */
+    .stCheckbox {
+        margin-bottom: 1rem !important;
+    }
+
+    .stCheckbox > label {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1rem !important;
+        font-weight: 500 !important;
+        color: #1f2937 !important;
+        background: transparent !important;
+        border: none !important;
+        padding: 0.6rem 0 !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .stCheckbox > label > div {
+        color: #1f2937 !important;
+    }
+
+    .stCheckbox span {
+        color: #1f2937 !important;
+    }
+
+    .stCheckbox input[type="checkbox"] {
+        width: 20px !important;
+        height: 20px !important;
+        border: 2px solid #9ca3af !important;
+        border-radius: 6px !important;
+        background-color: #ffffff !important;
+        margin-right: 0.8rem !important;
+        transition: all 0.3s ease !important;
+        appearance: none !important;
+        -webkit-appearance: none !important;
+    }
+
     .stCheckbox input[type="checkbox"]:checked {
-        background-color: #007bff !important;
-        background: #007bff !important;
-        border-color: #0056b3 !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        border-color: #5a67d8 !important;
     }
 
-    /* Checkmark icon */
     .stCheckbox input[type="checkbox"]:checked::after {
         content: "✓" !important;
         color: white !important;
-        font-size: 12px !important;
+        font-size: 14px !important;
         font-weight: bold !important;
         position: absolute !important;
         top: 50% !important;
@@ -387,421 +653,430 @@ st.markdown("""
         transform: translate(-50%, -50%) !important;
     }
 
-    /* Label hover effect */
-    .stCheckbox > label:hover {
-        background: transparent !important;
-        transform: none !important;
-        box-shadow: none !important;
+    /* Enhanced metrics styling */
+    .stMetric {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        text-align: center;
+        margin: 0.5rem 0;
     }
 
-    /* Selected checkbox label styling */
-    .stCheckbox:has(input:checked) > label {
-        background: transparent !important;
-        box-shadow: none !important;
+    .stMetric [data-testid="metric-container"] {
+        background: transparent;
+        border: none;
+        box-shadow: none;
     }
 
-    /* Simple selectbox styling */
-    .stSelectbox {
-        margin-bottom: 1rem;
-    }
-
-    /* Target Streamlit's specific checkbox elements */
-    .stCheckbox div[data-testid="stCheckbox"] input {
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-        border: 2px solid #6c757d !important;
-        appearance: none !important;
-        -webkit-appearance: none !important;
-    }
-
-    /* Target Streamlit's checkbox widget directly */
-    div[data-testid="stCheckbox"] > label {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0.2rem 0 !important;
-    }
-
-    /* Remove any background from checkbox containers */
-    div[data-testid="stCheckbox"] > label > div {
-        background: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-    }
-
-    /* Target the actual checkbox input element */
-    div[data-testid="stCheckbox"] input[type="checkbox"] {
-        background: #ffffff !important;
-        background-color: #ffffff !important;
-        background-image: none !important;
-        border: 1px solid #6c757d !important;
-        appearance: none !important;
-        -webkit-appearance: none !important;
-        width: 16px !important;
-        height: 16px !important;
-        margin-right: 0.5rem !important;
-    }
-
-    /* Additional override for unchecked state - most specific */
-    .stCheckbox input[type="checkbox"]:not(:checked) {
-        background-image: none !important;
-        background-color: #ffffff !important;
-        background: #ffffff !important;
-    }
-    }
-
-    /* Number input styling - Enhanced */
-    .stNumberInput > div > div {
-        background-color: #ffffff !important;
-        border: 2px solid #dee2e6 !important;
-        border-radius: 10px !important;
-        color: #212529 !important;
-        font-weight: 500 !important;
-        transition: all 0.3s ease !important;
-        padding: 0.5rem 1rem !important;
-        min-height: 48px !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    }
-
-    .stNumberInput > div > div:hover {
-        border-color: #007bff !important;
-        box-shadow: 0 3px 8px rgba(0,123,255,0.2) !important;
-        transform: translateY(-1px) !important;
-    }
-
-    .stNumberInput > div > div:focus-within {
-        border-color: #007bff !important;
-        box-shadow: 0 0 0 4px rgba(0,123,255,0.15) !important;
-    }
-
-    /* Number input label */
-    .stNumberInput > label {
-        color: #212529 !important;
-        font-weight: 600 !important;
+    .stMetric label {
+        font-family: 'Inter', sans-serif !important;
         font-size: 1rem !important;
-        margin-bottom: 0.5rem !important;
+        font-weight: 600 !important;
+        color: #64748b !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
     }
 
-    /* Number input field */
-    .stNumberInput input {
-        color: #212529 !important;
+    .stMetric [data-testid="metric-container"] > div {
+        font-family: 'Poppins', sans-serif !important;
+        font-size: 2.2rem !important;
+        font-weight: 700 !important;
+        color: #2c3e50 !important;
+    }
+
+    /* Skill category styling */
+    .skill-category {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 0.8rem 0;
+        border-left: 4px solid #667eea;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .skill-category h4 {
+        font-family: 'Poppins', sans-serif !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        color: #1f2937 !important;
+        margin-bottom: 0.8rem !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        padding-bottom: 0.5rem !important;
+    }
+
+    .skill-category {
+        color: #1f2937 !important;
+    }
+
+    .skill-category * {
+        color: #1f2937 !important;
+    }
+
+    /* Info boxes */
+    .info-box {
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-left: 4px solid;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        font-family: 'Inter', sans-serif;
+    }
+
+    .info-success {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        border-left-color: #10b981;
+        color: #064e3b;
+    }
+
+    .info-warning {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border-left-color: #f59e0b;
+        color: #78350f;
+    }
+
+    .info-primary {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        border-left-color: #3b82f6;
+        color: #1e3a8a;
+    }
+
+    /* Enhanced spacing for main sections */
+    .main-section {
+        margin: 4rem 0;
+        padding: 2rem 0;
+    }
+
+    /* Enhanced footer */
+    .footer-section {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        border-radius: 16px;
+        padding: 1.5rem 1rem;
+        margin-top: 2rem;
+        text-align: center;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .footer-section p {
+        font-family: 'Inter', sans-serif !important;
+        color: #64748b !important;
+        line-height: 1.6 !important;
+        margin: 0.8rem 0 !important;
+    }
+
+    .footer-section strong {
+        color: #2c3e50 !important;
+        font-weight: 600 !important;
+    }
+
+    /* Responsive design improvements */
+    @media (max-width: 768px) {
+        .main-header {
+            font-size: 2.2rem;
+        }
+
+        .main .block-container {
+            padding: 1rem 0.5rem;
+            margin: 0.5rem;
+        }
+
+        .prediction-box {
+            padding: 1rem;
+        }
+
+        .chart-container {
+            padding: 1rem;
+        }
+    }
+
+    /* Compact spacing utilities */
+    .spacing-lg {
+        margin: 1rem 0;
+    }
+
+    .spacing-xl {
+        margin: 1.5rem 0;
+    }
+
+    /* Reduce default margins */
+    .element-container {
+        margin-bottom: 0.2rem !important;
+    }
+
+    /* Remove gaps between Streamlit elements */
+    .stMarkdown {
+        margin-bottom: 0 !important;
+    }
+
+    .stMarkdown > div {
+        margin-bottom: 0 !important;
+    }
+
+    /* Remove empty space from containers */
+    [data-testid="stVerticalBlock"] {
+        gap: 0.2rem !important;
+    }
+
+    [data-testid="stHorizontalBlock"] {
+        gap: 0.5rem !important;
+    }
+
+    /* Force all text to be dark - override any white text */
+    .stApp, .stApp * {
+        color: #1f2937 !important;
+    }
+
+    /* Specific overrides for common white text issues */
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] span,
+    [data-testid="stMarkdownContainer"] div {
+        color: #1f2937 !important;
+    }
+
+    .stCheckbox > label > div,
+    .stCheckbox > label > div > span {
+        color: #1f2937 !important;
+    }
+
+    /* Tab content text */
+    .stTabs [data-baseweb="tab-panel"] {
+        color: #1f2937 !important;
+    }
+
+    .stTabs [data-baseweb="tab-panel"] * {
+        color: #1f2937 !important;
+    }
+
+    /* Skill selection text */
+    .skill-category label,
+    .skill-category span,
+    .skill-category div {
+        color: #1f2937 !important;
+    }
+
+    /* Enhanced scrollbar */
+    ::-webkit-scrollbar {
+        width: 12px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);
+        border-radius: 6px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+    }
+
+    /* Additional fixes for white text issues */
+    .stCheckbox > label[data-baseweb="checkbox"] {
+        color: #1f2937 !important;
+    }
+
+    .stCheckbox > label[data-baseweb="checkbox"] > div {
+        color: #1f2937 !important;
+    }
+
+    .stCheckbox > label[data-baseweb="checkbox"] > div > div {
+        color: #1f2937 !important;
+    }
+
+    .stCheckbox input + div {
+        color: #1f2937 !important;
+    }
+
+    /* Fix any remaining checkbox text */
+    input[type="checkbox"] + div {
+        color: #1f2937 !important;
+    }
+
+    /* Ensure visibility of all text elements */
+    .stTextInput, .stSelectbox, .stNumberInput, .stSlider, .stRadio {
+        color: #1f2937 !important;
+    }
+
+    .stTextInput label, .stSelectbox label, .stNumberInput label,
+    .stSlider label, .stRadio label {
+        color: #1f2937 !important;
+    }
+
+    /* Make sure markdown text is visible */
+    .stMarkdown {
+        color: #1f2937 !important;
+    }
+
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3,
+    .stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {
+        color: #1f2937 !important;
+    }
+
+    /* Tab panel content */
+    [role="tabpanel"] {
+        color: #1f2937 !important;
+    }
+
+    [role="tabpanel"] * {
+        color: #1f2937 !important;
+    }
+
+    /* Override any inherited white colors */
+    * {
+        color: inherit !important;
+    }
+
+    body, .stApp {
+        color: #1f2937 !important;
+    }
+
+
+
+    /* Simple menu styling */
+    [data-baseweb="menu"] {
+        background: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 6px !important;
+    }
+
+    [data-baseweb="menu"] li {
+        background: #ffffff !important;
+        color: #1f2937 !important;
+        padding: 0.5rem 1rem !important;
+    }
+
+    [data-baseweb="menu"] li:hover {
+        background: #f3f4f6 !important;
+        color: #1f2937 !important;
+    }
+
+    /* Ensure selectbox dropdown arrow is visible */
+    .stSelectbox [data-baseweb="select"] [title="open"] {
+        color: #1f2937 !important;
+    }
+
+    /* Fix selectbox value display */
+    .stSelectbox [data-baseweb="select"] span {
+        color: #1f2937 !important;
         font-weight: 500 !important;
-        border: none !important;
-        background-color: transparent !important;
     }
 
-    .stNumberInput input:focus {
-        outline: none !important;
+    /* Selectbox placeholder and value text */
+    .stSelectbox [data-baseweb="select"] div[data-baseweb="input"] {
+        color: #1f2937 !important;
     }
 
-    /* Caption text */
-    .caption {
-        color: #6c757d !important;
-        font-size: 0.875rem;
+    .stSelectbox [data-baseweb="select"] div[data-baseweb="input"] > div {
+        color: #1f2937 !important;
     }
 
-    /* Dataframe styling */
-    .stDataFrame {
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
+    /* All selectbox internal text */
+    .stSelectbox [data-baseweb="select"] * {
+        color: #1f2937 !important;
     }
 
-    /* Additional sidebar fixes for different Streamlit versions */
-    section[data-testid="stSidebar"] {
-        background-color: #f8f9fa !important;
+    /* Selectbox root element text */
+    .stSelectbox div[data-baseweb="select"] {
+        color: #1f2937 !important;
     }
 
-    section[data-testid="stSidebar"] .stMarkdown {
-        color: #212529 !important;
-    }
-
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {
-        color: #2E86AB !important;
-    }
-
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] li,
-    section[data-testid="stSidebar"] span {
-        color: #212529 !important;
-    }
-
-    /* Sidebar metric values */
-    section[data-testid="stSidebar"] [data-testid="metric-container"] {
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
-        border: 1px solid #dee2e6 !important;
-        border-radius: 8px !important;
-        padding: 1rem !important;
-        margin: 0.5rem 0 !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
-    }
-
-    section[data-testid="stSidebar"] [data-testid="metric-container"] div {
-        color: #212529 !important;
-    }
-
-    /* Sidebar scrollbar */
-    section[data-testid="stSidebar"]::-webkit-scrollbar {
-        width: 8px;
-    }
-
-    section[data-testid="stSidebar"]::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 4px;
-    }
-
-    section[data-testid="stSidebar"]::-webkit-scrollbar-thumb {
-        background: #c1c1c1;
-        border-radius: 4px;
-    }
-
-    section[data-testid="stSidebar"]::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8;
-    }
-
-    /* Slider styling */
-    .stSlider > div > div > div > div {
-        background-color: #007bff !important;
-    }
-
-    .stSlider > div > div > div {
-        background-color: #e9ecef !important;
-    }
-
-    /* Text input styling */
-    .stTextInput > div > div {
+    /* Universal dropdown menu fixes */
+    div[data-baseweb="popover"] {
         background-color: #ffffff !important;
-        border: 2px solid #dee2e6 !important;
-        border-radius: 8px !important;
-        color: #212529 !important;
-        transition: all 0.3s ease !important;
     }
 
-    .stTextInput > div > div:focus-within {
-        border-color: #007bff !important;
-        box-shadow: 0 0 0 3px rgba(0,123,255,0.1) !important;
-    }
-
-    /* Radio button styling */
-    .stRadio > div {
-        background-color: #f8f9fa !important;
-        border-radius: 8px !important;
-        padding: 1rem !important;
-        border: 1px solid #dee2e6 !important;
-    }
-
-    .stRadio label {
-        color: #212529 !important;
-        font-weight: 500 !important;
-    }
-
-    /* Date input styling */
-    .stDateInput > div > div {
+    div[data-baseweb="popover"] ul {
         background-color: #ffffff !important;
-        border: 2px solid #dee2e6 !important;
-        border-radius: 8px !important;
-        color: #212529 !important;
+        border: 1px solid #e2e8f0 !important;
     }
 
-    /* File uploader styling */
-    .stFileUploader > div {
-        background-color: #f8f9fa !important;
-        border: 2px dashed #007bff !important;
-        border-radius: 12px !important;
-        padding: 2rem !important;
-        text-align: center !important;
-    }
-
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: #f8f9fa !important;
-        border: 1px solid #dee2e6 !important;
-        border-radius: 8px !important;
-        color: #212529 !important;
-    }
-
-    /* Progress bar styling */
-    .stProgress > div > div > div {
-        background-color: #007bff !important;
-    }
-
-    /* Multiselect styling */
-    .stMultiSelect > div > div {
+    div[data-baseweb="popover"] li {
         background-color: #ffffff !important;
-        border: 2px solid #dee2e6 !important;
-        border-radius: 8px !important;
+        color: #1f2937 !important;
     }
 
-    /* Column styling for better spacing */
-    .css-1kyxreq {
+    /* Streamlit selectbox dropdown override */
+    .stSelectbox div[role="listbox"] {
+        background-color: #ffffff !important;
+    }
+
+    .stSelectbox div[role="listbox"] div {
+        background-color: #ffffff !important;
+        color: #1f2937 !important;
+    }
+
+
+
+    /* Remove empty spaces in columns */
+    .stColumn {
+        padding: 0 !important;
+    }
+
+    .stColumn > div {
+        padding: 0.2rem !important;
+    }
+
+    /* Remove chart container margins */
+    .js-plotly-plot {
+        margin: 0 !important;
+    }
+
+    /* Remove Streamlit default gaps */
+    .block-container > div {
+        gap: 0.3rem !important;
+    }
+
+    /* Compact metric spacing */
+    [data-testid="metric-container"] {
+        margin: 0.2rem 0 !important;
         padding: 0.5rem !important;
     }
 
-    /* Container styling */
-    .css-1y4p8pa {
-        padding: 2rem 1rem !important;
-    }
-
-    /* Remove default Streamlit margins */
-    .css-1v3fvcr {
-        padding-top: 1rem !important;
-    }
-
-    /* Custom spacing for sections */
-    .section-divider {
-        height: 2px;
-        background: linear-gradient(90deg, #007bff, #0056b3);
-        margin: 2rem 0;
-        border-radius: 1px;
-    }
-
-    /* Additional aggressive selectbox styling to ensure visibility */
-    [data-baseweb="select"] {
-        background-color: #ffffff !important;
-    }
-
-    [data-baseweb="select"] * {
-        background-color: #ffffff !important;
-        color: #212529 !important;
-    }
-
-    [data-baseweb="popover"] {
-        background-color: #ffffff !important;
-    }
-
-    [data-baseweb="popover"] * {
-        background-color: #ffffff !important;
-        color: #212529 !important;
-    }
-
-    /* Target all possible select-related elements */
-    .stSelectbox * {
-        background-color: #ffffff !important;
-        color: #212529 !important;
-    }
-
-    /* Override any dark themes */
-    .stSelectbox .css-1n76uvr,
-    .stSelectbox .css-1wy0on6,
-    .stSelectbox .css-26l3qy-menu,
-    .stSelectbox .css-4ljt47-MenuList {
-        background-color: #ffffff !important;
-        color: #212529 !important;
-        border: 1px solid #dee2e6 !important;
-    }
-
-    /* Age number input additional styling */
-    .stNumberInput * {
-        background-color: #ffffff !important;
-        color: #212529 !important;
-    }
-
-    /* Specific styling for form sections */
-    .stNumberInput[data-testid="stNumberInput"] {
-        background-color: #f8f9fa !important;
-        padding: 1rem !important;
-        border-radius: 10px !important;
-        border: 1px solid #dee2e6 !important;
+    /* Remove header extra spacing */
+    .stHeader {
+        padding: 0 !important;
         margin: 0.5rem 0 !important;
     }
 
-    .stSelectbox[data-testid="stSelectbox"] {
-        background-color: #f8f9fa !important;
-        padding: 1rem !important;
-        border-radius: 10px !important;
-        border: 1px solid #dee2e6 !important;
-        margin: 0.5rem 0 !important;
+    /* Hide empty chart containers */
+    .chart-container:empty {
+        display: none !important;
     }
 
-    /* Form section headers */
-    h4 {
-        color: #495057 !important;
-        font-weight: 600 !important;
-        margin-top: 1.5rem !important;
-        margin-bottom: 0.5rem !important;
-        padding: 0.5rem 0 !important;
-        border-bottom: 1px solid #dee2e6 !important;
+    /* Hide chart containers with only whitespace */
+    .chart-container:blank {
+        display: none !important;
     }
 
-    /* Help text styling */
-    .stSelectbox .css-1cpxqw2, .stNumberInput .css-1cpxqw2 {
-        color: #6c757d !important;
-        font-size: 0.875rem !important;
-        margin-top: 0.25rem !important;
+    /* Hide chart containers until content loads */
+    .chart-container:not(:has(*)) {
+        display: none !important;
     }
 
-    /* Enhanced form sections with better spacing */
-    .form-section {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        margin: 1.5rem 0;
-        border: 1px solid #dee2e6;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    /* Alternative: Hide containers with minimal content */
+    .chart-container {
+        min-height: 50px;
     }
 
-    /* Improved spacing for form elements */
-    .stSelectbox > div > div {
-        margin-bottom: 1rem !important;
-    }
-
-    .stNumberInput > div {
-        margin-bottom: 1rem !important;
-    }
-
-    /* Enhanced section separators */
-    .element-container:has(.stSubheader) {
-        margin-top: 2rem !important;
-        margin-bottom: 1rem !important;
-    }
-
-
-
-    /* Ensure form sections take full width within their container */
-    .stColumns > div {
-        min-width: 0 !important;
-        flex: 1 1 auto !important;
-    }
-
-
-
-    /* Better visual hierarchy for markdown headers */
-    h3 {
-        color: #2c3e50 !important;
-        font-weight: 600 !important;
-        margin-top: 1.5rem !important;
-        margin-bottom: 1rem !important;
-        border-bottom: 2px solid #3498db !important;
-        padding-bottom: 0.5rem !important;
-        display: block !important;
-    }
-
-    /* Section spacing improvements */
-    .stMarkdown > div > h3 {
-        margin-top: 2rem !important;
-        margin-bottom: 1.5rem !important;
-    }
-
-    /* Better column alignment in forms */
-    .stColumns > div {
-        padding: 0 0.5rem !important;
-    }
-
-    /* Enhanced visual separation between sections */
-    .stSubheader {
-        margin-top: 2.5rem !important;
-        margin-bottom: 1.5rem !important;
+    .chart-container:empty,
+    .chart-container:not(:has(div)) {
+        display: none !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
-
 
 @st.cache_resource
 def load_model_and_info():
     """Load the trained model and metadata"""
     try:
-        # Check if model files exist
         model_path = 'models/best_employment_model.joblib'
         info_path = 'models/model_info.json'
 
@@ -814,18 +1089,12 @@ def load_model_and_info():
             return None, None
 
         model = joblib.load(model_path)
-        with open(info_path, 'r', encoding='utf-8') as f:
+        with open(info_path, 'r') as f:
             model_info = json.load(f)
-        # keep model info accessible later
-        st.session_state['model_info'] = model_info
         return model, model_info
-    except (FileNotFoundError, OSError, IOError, json.JSONDecodeError, ValueError) as e:
+    except Exception as e:
         st.error(f"Error loading model: {str(e)}")
-        st.write("Please make sure you have:")
-        st.write("1. Run the model training notebook")
-        st.write("2. The 'models' directory exists with trained model files")
         return None, None
-
 
 # Define skill families (same as in preprocessing)
 SKILL_FAMILIES = {
@@ -854,88 +1123,58 @@ SKILL_FAMILIES = {
     ]
 }
 
-
 def calculate_skill_scores(selected_skills):
-    """Calculate skill family scores based on selected skills (same logic as preprocessing)"""
+    """Calculate skill family scores based on selected skills"""
     scores = {}
     binary_flags = {}
 
     for family_name, family_techs in SKILL_FAMILIES.items():
-        # Count selected technologies from this family
-        selected_from_family = [
-            skill for skill in selected_skills if skill in family_techs]
+        selected_from_family = [skill for skill in selected_skills if skill in family_techs]
         selected_count = len(selected_from_family)
         total_count = len(family_techs)
 
-        # Calculate percentage score
-        percentage = (selected_count / total_count) * \
-            100 if total_count > 0 else 0
+        percentage = (selected_count / total_count) * 100 if total_count > 0 else 0
 
-        # Store results
         scores[f'{family_name}_Score'] = round(percentage, 1)
         binary_flags[f'Has_{family_name}'] = 1 if selected_count > 0 else 0
 
     return scores, binary_flags
 
-
 def calculate_derived_features(binary_flags):
-    """Calculate skill breadth and full-stack indicator (same logic as preprocessing)"""
+    """Calculate skill breadth and full-stack indicator"""
     skill_breadth = sum(binary_flags.values())
 
     is_fullstack = 1 if (binary_flags['Has_Programming'] == 1 and
-                         binary_flags['Has_Web'] == 1 and
-                         binary_flags['Has_Database'] == 1) else 0
+                        binary_flags['Has_Web'] == 1 and
+                        binary_flags['Has_Database'] == 1) else 0
 
     return {
         'Skill_Breadth': skill_breadth,
         'Is_FullStack': is_fullstack
     }
 
-
 def create_feature_vector(user_inputs, feature_names):
-    """Create feature vector from user inputs using same preprocessing logic"""
-    # Initialize with zeros
+    """Create feature vector from user inputs"""
     features = pd.DataFrame(0, index=[0], columns=feature_names)
 
-    # Calculate skill scores and flags from selected skills
-    scores, binary_flags = calculate_skill_scores(
-        user_inputs['selected_skills'])
+    scores, binary_flags = calculate_skill_scores(user_inputs['selected_skills'])
     derived_features = calculate_derived_features(binary_flags)
 
-    # Set skill scores
     for score_name, score_value in scores.items():
         if score_name in feature_names:
             features.loc[0, score_name] = score_value
 
-    # Set binary flags
     for flag_name, flag_value in binary_flags.items():
         if flag_name in feature_names:
             features.loc[0, flag_name] = flag_value
 
-    # Set derived features
     for derived_name, derived_value in derived_features.items():
         if derived_name in feature_names:
             features.loc[0, derived_name] = derived_value
 
-    # CRITICAL FIX: Use actual count of selected skills for ComputerSkills
-    # This matches the preprocessing logic: ComputerSkills = total count of technologies known
     if 'ComputerSkills' in feature_names:
         skill_count = len(user_inputs['selected_skills'])
-
-        # Breakdown by skill family for debugging
-        prog_count = len([s for s in user_inputs['selected_skills']
-                         if s in SKILL_FAMILIES['Programming']])
-        web_count = len(
-            [s for s in user_inputs['selected_skills'] if s in SKILL_FAMILIES['Web']])
-        db_count = len([s for s in user_inputs['selected_skills']
-                       if s in SKILL_FAMILIES['Database']])
-        cloud_count = len([s for s in user_inputs['selected_skills']
-                          if s in SKILL_FAMILIES['CloudDevOps']])
-
-        # Cap at reasonable maximum (training data shows max ~30-40 skills)
         features.loc[0, 'ComputerSkills'] = min(skill_count, 40)
-        print(
-            f"[DEBUG] ComputerSkills = {skill_count} (Prog:{prog_count} + Web:{web_count} + DB:{db_count} + Cloud:{cloud_count})")
 
     if 'EducationLevel_Numeric' in feature_names:
         features.loc[0, 'EducationLevel_Numeric'] = user_inputs['education_level']
@@ -948,7 +1187,6 @@ def create_feature_vector(user_inputs, feature_names):
     if 'HasAccessibilityNeeds' in feature_names:
         features.loc[0, 'HasAccessibilityNeeds'] = 1 if user_inputs['accessibility'] else 0
 
-    # Gender (one-hot encoded)
     if user_inputs['gender'] == 'Man' and 'Gender_Man' in feature_names:
         features.loc[0, 'Gender_Man'] = 1
     elif user_inputs['gender'] == 'Woman' and 'Gender_Woman' in feature_names:
@@ -963,15 +1201,12 @@ def create_feature_vector(user_inputs, feature_names):
 
     return features
 
-
 def reality_check_prediction(probability, user_inputs, scores, derived):
-    """Apply reality check to predictions based on employment market patterns"""
+    """Apply reality check to predictions"""
     skill_count = len(user_inputs['selected_skills'])
 
-    # Define employment likelihood adjustment factors
     adjustment_factors = []
 
-    # Critical factors that strongly impact employment
     if skill_count <= 2:
         adjustment_factors.append(("Very few skills", -0.3))
     elif skill_count <= 5:
@@ -986,433 +1221,221 @@ def reality_check_prediction(probability, user_inputs, scores, derived):
     if scores['Programming_Score'] < 15:
         adjustment_factors.append(("Very limited programming", -0.2))
 
-    # Positive factors
     if derived['Is_FullStack']:
         adjustment_factors.append(("Full-stack capability", +0.1))
 
     if skill_count >= 15:
         adjustment_factors.append(("Extensive skills", +0.1))
 
-    # Calculate adjusted probability
     total_adjustment = sum(factor[1] for factor in adjustment_factors)
     adjusted_probability = max(0.05, min(0.95, probability + total_adjustment))
 
     return adjusted_probability, adjustment_factors
 
-
 def get_recommendations(probability, user_inputs):
     """Generate personalized recommendations"""
     recommendations = []
 
-    # Calculate skill scores for recommendations
-    scores, binary_flags = calculate_skill_scores(
-        user_inputs['selected_skills'])
+    scores, binary_flags = calculate_skill_scores(user_inputs['selected_skills'])
     skill_count = len(user_inputs['selected_skills'])
 
-    # Priority recommendations based on critical gaps
     if skill_count <= 3:
-        recommendations.append(
-            " **CRITICAL:** Learn at least 5-8 core technologies")
-        recommendations.append(
-            " Focus on popular languages: Python, JavaScript, or Java")
+        recommendations.append("**CRITICAL:** Learn at least 5-8 core technologies")
+        recommendations.append("Focus on popular languages: Python, JavaScript, or Java")
 
     if not user_inputs['prof_experience'] and not user_inputs['is_developer']:
-        recommendations.append(
-            " **URGENT:** Gain practical experience through projects or internships")
+        recommendations.append("**URGENT:** Gain practical experience through projects or internships")
 
-    # Skill-specific recommendations
     if scores['Programming_Score'] < 30:
-        recommendations.append(" Master at least 2-3 programming languages")
+        recommendations.append("Master at least 2-3 programming languages")
     if scores['Web_Score'] < 20 and scores['Programming_Score'] > 30:
-        recommendations.append(
-            " Add web development skills (HTML/CSS, React, Node.js)")
+        recommendations.append("Add web development skills (HTML/CSS, React, Node.js)")
     if scores['Database_Score'] < 15:
-        recommendations.append(" Learn database fundamentals (SQL, MongoDB)")
+        recommendations.append("Learn database fundamentals (SQL, MongoDB)")
     if scores['CloudDevOps_Score'] < 15 and skill_count > 8:
-        recommendations.append(" Add cloud/DevOps skills for senior roles")
+        recommendations.append("Add cloud/DevOps skills for senior roles")
 
-    # General recommendations based on probability ranges
     if probability < 0.4:
-        recommendations.append(
-            " Focus on building a strong foundation before applying")
-        recommendations.append("🏫 Consider bootcamps or formal education")
+        recommendations.append("Focus on building a strong foundation before applying")
+        recommendations.append("Consider bootcamps or formal education")
     elif probability < 0.6:
-        recommendations.append("📈 You're on the right track - keep learning!")
-        recommendations.append(
-            " Network with developers in your areas of interest")
+        recommendations.append("You're on the right track - keep learning!")
+        recommendations.append("Network with developers in your areas of interest")
     elif probability < 0.8:
-        recommendations.append(
-            " Start applying to positions matching your skills")
-        recommendations.append(
-            " Highlight your technical strengths in applications")
+        recommendations.append("Start applying to positions matching your skills")
+        recommendations.append("Highlight your technical strengths in applications")
     else:
-        recommendations.append(
-            " You have strong employability - apply confidently!")
-        recommendations.append(" Consider specialized or senior positions")
+        recommendations.append("You have strong employability - apply confidently!")
+        recommendations.append("Consider specialized or senior positions")
 
-    return recommendations[:5]  # Return top 5 recommendations
-
-
-def create_pdf_report(user_inputs, probability, raw_probability, prediction, scores, derived, recommendations, model_info):
-    """Build a themed PDF report and return bytes."""
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.units import cm
-    from reportlab.lib import colors
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    margin = 2 * cm
-    x = margin
-    y = height - margin
-
-    # Theme
-    brand_color = colors.HexColor('#2E86AB')
-    brand_dark = colors.HexColor('#1f5e78')
-    success_color = colors.HexColor('#28a745')
-    warn_red = colors.HexColor('#dc3545')
-    light_bg = colors.HexColor('#F6FAFD')
-    border_color = colors.HexColor('#E9ECEF')
-
-    def write_line(text, dy=14, font="Helvetica", size=11, color=colors.black):
-        nonlocal y
-        c.setFont(font, size)
-        c.setFillColor(color)
-        c.drawString(x, y, text)
-        y -= dy
-
-    def ensure_space(lines=6, line_height=14):
-        nonlocal y
-        if y - (lines * line_height) < margin:
-            c.showPage()
-            y = height - margin
-            draw_header()
-            y -= 18
-
-    def draw_header():
-        c.setFillColor(brand_color)
-        c.rect(0, height - 2.2*cm, width, 2.2*cm, stroke=0, fill=1)
-        c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 18)
-        c.drawString(margin, height - 1.1*cm,
-                     "PredSeeker - Employment Prediction Report")
-        c.setFont("Helvetica", 10)
-        c.drawRightString(width - margin, height - 1.1*cm,
-                          datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-
-    def draw_section_card(title_text, body_fn, card_height_est=5*cm):
-        nonlocal y
-        ensure_space(lines=int(card_height_est/14) + 6)
-        card_top = y
-        c.setFillColor(light_bg)
-        c.setStrokeColor(border_color)
-        c.roundRect(x - 6, card_top - card_height_est, width - 2 *
-                    margin + 12, card_height_est, 10, stroke=1, fill=1)
-        c.setFillColor(brand_color)
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(x, card_top - 16, title_text)
-        y = card_top - 32
-        c.setStrokeColor(border_color)
-        c.line(x - 4, y + 8, width - margin + 4, y + 8)
-        body_fn()
-        y -= 10
-
-    # Header bar
-    draw_header()
-    y -= 24
-
-    # Result card
-    def result_body():
-        nonlocal y
-        result_text = "High Employment Probability" if prediction == 1 else "Room for Improvement"
-        prob_pct = f"{probability*100:.1f}%"
-        raw_pct = f"{raw_probability*100:.1f}%"
-
-        badge_color = success_color if prediction == 1 else warn_red
-        c.setFillColor(badge_color)
-        c.roundRect(x, y - 20, 180, 22, 6, stroke=0, fill=1)
-        c.setFillColor(colors.white)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(x + 10, y - 14, result_text)
-        y -= 34
-
-        bar_w = width - 2*margin - 20
-        bar_h = 14
-        c.setFillColor(colors.HexColor('#DEE2E6'))
-        c.roundRect(x, y - bar_h, bar_w, bar_h, 7, stroke=0, fill=1)
-        fill_w = max(0.0, min(1.0, probability)) * bar_w
-        c.setFillColor(brand_dark)
-        c.roundRect(x, y - bar_h, fill_w, bar_h, 7, stroke=0, fill=1)
-        c.setFillColor(brand_color)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawRightString(x + bar_w, y - bar_h - 2, prob_pct)
-        y -= (bar_h + 10)
-
-        c.setFillColor(colors.HexColor('#6C757D'))
-        c.setFont("Helvetica", 10)
-        c.drawString(
-            x, y, f"Raw probability: {raw_pct} (before heuristic adjustment)")
-        y -= 18
-
-    draw_section_card("Result", result_body, card_height_est=4*cm)
-
-    # Skills card
-    def skills_body():
-        nonlocal y
-        c.setFillColor(colors.black)
-        c.setFont("Helvetica", 11)
-        write_line(
-            f"Total Selected Skills: {len(user_inputs['selected_skills'])}", dy=16)
-        write_line(f"Skill Breadth (families): {derived['Skill_Breadth']} / 4")
-        write_line(f"Full-Stack: {'Yes' if derived['Is_FullStack'] else 'No'}")
-        y -= 4
-        score_labels = [
-            ("Programming", scores['Programming_Score']),
-            ("Web", scores['Web_Score']),
-            ("Database", scores['Database_Score']),
-            ("Cloud/DevOps", scores['CloudDevOps_Score'])
-        ]
-        col_w = (width - 2*margin - 10) / 2
-        row_h = 22
-        for i in range(0, len(score_labels), 2):
-            ensure_space(lines=2)
-            for j in range(2):
-                if i + j >= len(score_labels):
-                    continue
-                label, val = score_labels[i + j]
-                px = x + j * col_w
-                c.setFillColor(colors.HexColor('#F1F8FE'))
-                c.roundRect(px, y - row_h + 4, col_w - 8,
-                            row_h, 6, stroke=0, fill=1)
-                c.setFillColor(brand_color)
-                c.setFont("Helvetica-Bold", 10)
-                c.drawString(px + 8, y - 8, f"{label}")
-                c.setFillColor(colors.HexColor('#343A40'))
-                c.setFont("Helvetica", 10)
-                c.drawRightString(px + col_w - 16, y - 8, f"{val:.1f}%")
-            y -= row_h
-
-        if user_inputs['selected_skills']:
-            y -= 4
-            c.setFillColor(brand_color)
-            c.setFont("Helvetica-Bold", 11)
-            c.drawString(x, y, "Top Skills")
-            y -= 14
-            c.setFillColor(colors.HexColor('#343A40'))
-            c.setFont("Helvetica", 10)
-            for s in user_inputs['selected_skills'][:8]:
-                ensure_space(lines=1)
-                c.circle(x + 3, y + 3, 2, stroke=0, fill=1)
-                c.drawString(x + 10, y, s)
-                y -= 14
-
-    draw_section_card("Skills Summary", skills_body, card_height_est=7*cm)
-
-    # Profile card
-    def profile_body():
-        nonlocal y
-        rows = [
-            ("Age", str(user_inputs['age'])),
-            ("Gender", user_inputs['gender']),
-            ("Education Level", str(user_inputs['education_level'])),
-            ("Professional Developer",
-             'Yes' if user_inputs['is_developer'] else 'No'),
-            ("Professional Experience",
-             'Yes' if user_inputs['prof_experience'] else 'No'),
-            ("Mental Health Concerns",
-             'Yes' if user_inputs['mental_health'] else 'No'),
-            ("Accessibility Needs",
-             'Yes' if user_inputs['accessibility'] else 'No'),
-        ]
-        row_h = 18
-        label_w = 160
-        for label, value in rows:
-            ensure_space(lines=1)
-            c.setFillColor(colors.HexColor('#F8F9FA'))
-            c.roundRect(x, y - row_h + 4, width - 2*margin -
-                        10, row_h, 6, stroke=0, fill=1)
-            c.setFillColor(colors.HexColor('#6C757D'))
-            c.setFont("Helvetica", 10)
-            c.drawString(x + 8, y - 8, label)
-            c.setFillColor(colors.HexColor('#212529'))
-            c.setFont("Helvetica-Bold", 10)
-            c.drawString(x + label_w, y - 8, value)
-            y -= row_h
-
-    draw_section_card("Profile", profile_body, card_height_est=6*cm)
-
-    # Recommendations card
-    def recs_body():
-        nonlocal y
-        for rec in recommendations[:8]:
-            ensure_space(lines=1)
-            txt = str(rec).lstrip('• ').strip()
-            c.setFillColor(brand_color)
-            c.circle(x + 3, y + 3, 2, stroke=0, fill=1)
-            c.setFillColor(colors.HexColor('#343A40'))
-            c.setFont("Helvetica", 10)
-            c.drawString(x + 10, y, txt)
-            y -= 14
-
-    draw_section_card("Recommendations", recs_body, card_height_est=5*cm)
-
-    # Footer / model info
-    y = max(y, 3*cm)
-    c.setStrokeColor(border_color)
-    c.line(margin, y, width - margin, y)
-    y -= 14
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(brand_color)
-    c.drawString(x, y, "Model")
-    y -= 16
-    c.setFillColor(colors.HexColor('#212529'))
-    c.setFont("Helvetica", 10)
-    c.drawString(x, y, f"Algorithm: {model_info.get('model_name', 'N/A')}")
-    y -= 14
-    pm = model_info.get('performance_metrics', {})
-    if isinstance(pm, dict):
-        c.drawString(
-            x, y, f"ROC-AUC: {pm.get('ROC-AUC', 'N/A')}  |  Accuracy: {pm.get('Accuracy', 'N/A')}  |  F1-Score: {pm.get('F1-Score', 'N/A')}")
-        y -= 16
-
-    c.save()
-    buffer.seek(0)
-    return buffer.getvalue()
-
+    return recommendations[:5]
 
 def main():
     # Header
-    st.markdown('<h1 class="main-header">PredSeeker</h1>',
-                unsafe_allow_html=True)
-    st.markdown('<h3 class="sub-header">AI-Powered Developer Employment Predictor</h3>',
-                unsafe_allow_html=True)
-    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">PredSeeker</h1>', unsafe_allow_html=True)
+    st.markdown('<h3 class="sub-header">AI-Powered Developer Employment Predictor</h3>', unsafe_allow_html=True)
 
     # Load model
     model, model_info = load_model_and_info()
 
     if model is None:
-        st.error(" Could not load the trained model. Please check the model files.")
-        st.info(" Make sure you have run the model training notebook and the model files exist in the 'models' directory.")
+        st.error("Could not load the trained model. Please check the model files.")
+        st.info("Make sure you have run the model training notebook and the model files exist in the 'models' directory.")
         return
 
-    
-    # Main content
-    tab1, tab2 = st.tabs([" Make Prediction", " About the Model"])
+    # Enhanced Sidebar
+    with st.sidebar:
+        st.markdown("""
+        <div class="sidebar-section">
+            <h3 class="sidebar-header">Model Performance</h3>
+        """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("ROC-AUC", f"{model_info['performance_metrics']['ROC-AUC']:.3f}")
+            st.metric("Accuracy", f"{model_info['performance_metrics']['Accuracy']:.3f}")
+        with col2:
+            st.metric("F1-Score", f"{model_info['performance_metrics']['F1-Score']:.3f}")
+            st.metric("Precision", f"{model_info['performance_metrics']['Precision']:.3f}")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="sidebar-section">
+            <h3 class="sidebar-header">Model Information</h3>
+            <div style="color: #374151; line-height: 1.8; font-size: 1rem;">
+                <p><strong>Algorithm:</strong> {model_info['model_name']}</p>
+                <p><strong>Features:</strong> {len(model_info['features'])}</p>
+                <p><strong>Training Date:</strong> {model_info['training_date']}</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="sidebar-section">
+            <h3 class="sidebar-header">Dataset Statistics</h3>
+            <div style="color: #374151; line-height: 1.8; font-size: 1rem;">
+                <p><strong>Training Samples:</strong> 58,769</p>
+                <p><strong>Test Samples:</strong> 14,693</p>
+                <p><strong>Data Source:</strong> Stack Overflow Survey</p>
+                <p><strong>Employment Rate:</strong> ~74% (Balanced Dataset)</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div class="info-box info-primary">
+            <p style="margin: 0; font-size: 0.95rem; text-align: center;">
+                <strong>Pro Tip:</strong> Select diverse skills across multiple categories for better employment predictions!
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Main content with enhanced tabs
+    tab1, tab2 = st.tabs(["Make Prediction", "About the Model"])
 
     with tab1:
-        col1, col2 = st.columns([2, 1])
+        col1, col2 = st.columns([2, 1], gap="large")
 
         with col1:
-            st.header(" Enter Your Developer Profile")
+            st.header("Enter Your Developer Profile")
 
             # Skills Selection Section
-            st.subheader(" Technical Skills - Select Your Skills")
+            st.subheader("Technical Skills - Select Your Skills")
 
-            # Create tabs for each skill family
-            tab_prog, tab_web, tab_db, tab_cloud = st.tabs(
-                ["Programming", "Web Tech", "Database", "Cloud/DevOps"])
+            tab_prog, tab_web, tab_db, tab_cloud = st.tabs(["Programming", "Web Tech", "Database", "Cloud/DevOps"])
 
             selected_skills = []
 
             with tab_prog:
-                # st.markdown('<div class="skill-category">', unsafe_allow_html=True)
-                st.write("**💻 Programming Languages & Frameworks**")
-                # st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+                st.markdown('<h4>Programming Languages & Frameworks</h4>', unsafe_allow_html=True)
                 prog_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['Programming']):
                     with prog_cols[i % 3]:
                         if st.checkbox(skill, key=f"prog_{skill}"):
                             selected_skills.append(skill)
+                st.markdown('</div>', unsafe_allow_html=True)
 
             with tab_web:
-                #st.markdown('<div class="skill-category">', unsafe_allow_html=True)
-                st.write("**🌐 Web Development Technologies**")
-                #st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+                st.markdown('<h4>Web Development Technologies</h4>', unsafe_allow_html=True)
                 web_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['Web']):
                     with web_cols[i % 3]:
                         if st.checkbox(skill, key=f"web_{skill}"):
                             selected_skills.append(skill)
+                st.markdown('</div>', unsafe_allow_html=True)
 
             with tab_db:
-                #st.markdown('<div class="skill-category">', unsafe_allow_html=True)
-                st.write("**🗄️ Database & Data Storage**")
-                #st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+                st.markdown('<h4>Database & Data Storage</h4>', unsafe_allow_html=True)
                 db_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['Database']):
                     with db_cols[i % 3]:
                         if st.checkbox(skill, key=f"db_{skill}"):
                             selected_skills.append(skill)
+                st.markdown('</div>', unsafe_allow_html=True)
 
             with tab_cloud:
-                #st.markdown('<div class="skill-category">', unsafe_allow_html=True)
-                st.write("**☁️ Cloud Computing & DevOps**")
-                #st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+                st.markdown('<h4>Cloud Computing & DevOps</h4>', unsafe_allow_html=True)
                 cloud_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['CloudDevOps']):
                     with cloud_cols[i % 3]:
                         if st.checkbox(skill, key=f"cloud_{skill}"):
                             selected_skills.append(skill)
+                st.markdown('</div>', unsafe_allow_html=True)
 
             # Display selected skills summary
             if selected_skills:
                 st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
-                           border-left: 4px solid #17a2b8; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                    <strong style="color: #0c5460;">Selected {len(selected_skills)} skills:</strong>
-                    <br><span style="color: #0c5460;">{', '.join(selected_skills[:5])}{' and ' + str(len(selected_skills) - 5) + ' more...' if len(selected_skills) > 5 else ''}</span>
+                <div class="info-box info-success">
+                    <strong>Selected {len(selected_skills)} skills:</strong><br>
+                    <span>{', '.join(selected_skills[:5])}{' and ' + str(len(selected_skills) - 5) + ' more...' if len(selected_skills) > 5 else ''}</span>
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Calculate and display skill scores
                 scores, binary_flags = calculate_skill_scores(selected_skills)
                 derived = calculate_derived_features(binary_flags)
-
-                st.markdown("###  Your Skill Profile")
+                st.subheader("Your Skill Profile")
                 score_cols = st.columns(4)
                 with score_cols[0]:
                     st.metric("Programming", f"{scores['Programming_Score']:.1f}%",
-                              f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Programming']])}/{len(SKILL_FAMILIES['Programming'])}")
+                             f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Programming']])}/{len(SKILL_FAMILIES['Programming'])}")
                 with score_cols[1]:
                     st.metric("Web Tech", f"{scores['Web_Score']:.1f}%",
-                              f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Web']])}/{len(SKILL_FAMILIES['Web'])}")
+                             f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Web']])}/{len(SKILL_FAMILIES['Web'])}")
                 with score_cols[2]:
                     st.metric("Database", f"{scores['Database_Score']:.1f}%",
-                              f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Database']])}/{len(SKILL_FAMILIES['Database'])}")
+                             f"{len([s for s in selected_skills if s in SKILL_FAMILIES['Database']])}/{len(SKILL_FAMILIES['Database'])}")
                 with score_cols[3]:
                     st.metric("Cloud/DevOps", f"{scores['CloudDevOps_Score']:.1f}%",
-                              f"{len([s for s in selected_skills if s in SKILL_FAMILIES['CloudDevOps']])}/{len(SKILL_FAMILIES['CloudDevOps'])}")
+                             f"{len([s for s in selected_skills if s in SKILL_FAMILIES['CloudDevOps']])}/{len(SKILL_FAMILIES['CloudDevOps'])}")
 
-                # Show special indicators with better styling
                 if derived['Is_FullStack']:
                     st.markdown("""
-                    <div style="background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-                               border-left: 4px solid #28a745; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                        <strong style="color: #155724;">🌟 Full-Stack Developer Profile Detected!</strong>
+                    <div class="info-box info-success">
+                        <strong>Full-Stack Developer Profile Detected!</strong>
                     </div>
                     """, unsafe_allow_html=True)
 
                 st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #cce7ff 0%, #b3d7ff 100%);
-                           border-left: 4px solid #007bff; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                    <strong style="color: #004085;"> Skill Breadth: {derived['Skill_Breadth']} out of 4 skill categories</strong>
+                <div class="info-box info-primary">
+                    <strong>Skill Breadth: {derived['Skill_Breadth']} out of 4 skill categories</strong>
                 </div>
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-                           border-left: 4px solid #ffc107; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                    <strong style="color: #856404;">Please select at least one skill to continue</strong>
+                <div class="info-box info-warning">
+                    <strong>Please select at least one skill to continue</strong>
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Demographics Section with improved layout
-            st.subheader(" Personal Information")
+            # Demographics Section
+            st.subheader("Personal Information")
 
-            # Age Section
-            st.markdown("####  Age")
+            st.markdown("#### Age")
             age = st.number_input(
                 "Enter your age",
                 min_value=16,
@@ -1422,41 +1445,33 @@ def main():
                 help="Your current age in years"
             )
 
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Gender Section - Simple Layout
-            st.markdown("####  Gender")
-            gender = st.selectbox(
+            st.markdown("#### Gender")
+            gender_options = ["Man", "Woman", "Prefer not to say"]
+            gender_mapping = {"Man": "Man", "Woman": "Woman", "Prefer not to say": "NonBinary"}
+            gender_display = st.selectbox(
                 "Select your gender:",
-                ["Man", "Woman", "NonBinary"],
+                gender_options,
                 index=0,
                 key="gender_select"
             )
+            gender = gender_mapping[gender_display]
 
-            # Professional Section with better spacing
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader(" Professional Background")
+            # Professional Section
+            st.subheader("Professional Background")
 
-            # Calculate computer skills automatically from selected skills
+            # Computer skills display
             total_selected_skills = len(selected_skills)
 
-            # Display computer skills as calculated value (not editable)
             if total_selected_skills > 0:
-                # Calculate breakdown for display
-                prog_selected = len(
-                    [s for s in selected_skills if s in SKILL_FAMILIES['Programming']])
-                web_selected = len(
-                    [s for s in selected_skills if s in SKILL_FAMILIES['Web']])
-                db_selected = len(
-                    [s for s in selected_skills if s in SKILL_FAMILIES['Database']])
-                cloud_selected = len(
-                    [s for s in selected_skills if s in SKILL_FAMILIES['CloudDevOps']])
+                prog_selected = len([s for s in selected_skills if s in SKILL_FAMILIES['Programming']])
+                web_selected = len([s for s in selected_skills if s in SKILL_FAMILIES['Web']])
+                db_selected = len([s for s in selected_skills if s in SKILL_FAMILIES['Database']])
+                cloud_selected = len([s for s in selected_skills if s in SKILL_FAMILIES['CloudDevOps']])
 
                 st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
-                           border-left: 4px solid #17a2b8; padding: 1.5rem; border-radius: 10px; margin: 1rem 0; text-align: center;">
-                    <h3 style="color: #0c5460; margin-bottom: 0.5rem;">🖥️ Computer Skills Count: {total_selected_skills}</h3>
-                    <p style="color: #0c5460; margin: 0; font-size: 1rem;">
+                <div class="info-box info-primary" style="text-align: center;">
+                    <h3 style="margin-bottom: 1rem;">Computer Skills Count: {total_selected_skills}</h3>
+                    <p style="margin: 0; font-size: 1.1rem;">
                         <strong>Auto-calculated Breakdown:</strong><br>
                         Programming({prog_selected}) + Web({web_selected}) + Database({db_selected}) + Cloud/DevOps({cloud_selected}) = {total_selected_skills} total skills
                     </p>
@@ -1464,15 +1479,14 @@ def main():
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #cce7ff 0%, #b3d7ff 100%);
-                           border-left: 4px solid #007bff; padding: 1.5rem; border-radius: 10px; margin: 1rem 0; text-align: center;">
-                    <h3 style="color: #004085; margin-bottom: 0.5rem;">🖥️ Computer Skills Count: 0</h3>
-                    <p style="color: #004085; margin: 0;">Select skills above to update automatically</p>
+                <div class="info-box info-primary" style="text-align: center;">
+                    <h3 style="margin-bottom: 0.5rem;">Computer Skills Count: 0</h3>
+                    <p style="margin: 0;">Select skills above to update automatically</p>
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Education Level Section - Simple Layout
-            st.markdown("####  Education Level")
+            # Education Level
+            st.markdown("#### Education Level")
 
             education_options = [
                 'No Higher Education',
@@ -1493,45 +1507,36 @@ def main():
             education_display = st.selectbox(
                 "Select your highest education level:",
                 education_options,
-                index=2,  # Default to Bachelor's
+                index=2,
                 key="education_select"
             )
             education_level = education_mapping[education_display]
 
             # Experience and Background
-            st.subheader(" Experience & Background")
+            st.subheader("Experience & Background")
             col1_exp, col2_exp = st.columns(2)
             with col1_exp:
-                is_developer = st.checkbox(
-                    "I am a professional developer", value=True)
-                prof_experience = st.checkbox(
-                    "I have professional coding experience", value=True)
+                is_developer = st.checkbox("I am a professional developer", value=True)
+                prof_experience = st.checkbox("I have professional coding experience", value=True)
             with col2_exp:
                 mental_health = st.checkbox("I have mental health concerns")
                 accessibility = st.checkbox("I have accessibility needs")
 
-            salary_info = st.checkbox(
-                "I'm willing to share salary information")
+            salary_info = st.checkbox("I'm willing to share salary information")
 
-            # Prediction Button (only show if skills are selected)
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown('<div class="section-divider"></div>',
-                        unsafe_allow_html=True)
+            # Prediction Button
             if not selected_skills:
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-                           border-left: 4px solid #ffc107; padding: 1rem; border-radius: 8px; margin: 1rem 0; text-align: center;">
-                    <strong style="color: #856404;"> Please select at least one technical skill above to enable prediction</strong>
+                <div class="info-box info-warning" style="text-align: center;">
+                    <strong>Please select at least one technical skill above to enable prediction</strong>
                 </div>
                 """, unsafe_allow_html=True)
-                st.button(" Predict Employment Probability",
-                          disabled=True, use_container_width=True)
-            elif st.button(" Predict Employment Probability", type="primary", use_container_width=True):
+                st.button("Predict Employment Probability", disabled=True, use_container_width=True)
+            elif st.button("Predict Employment Probability", type="primary", use_container_width=True):
                 user_inputs = {
                     'selected_skills': selected_skills,
                     'age': age,
                     'gender': gender,
-                    # Auto-calculated from selected skills
                     'computer_skills': len(selected_skills),
                     'education_level': education_level,
                     'is_developer': is_developer,
@@ -1542,35 +1547,25 @@ def main():
                 }
 
                 try:
-                    # Create feature vector
-                    features = create_feature_vector(
-                        user_inputs, model_info['features'])
+                    features = create_feature_vector(user_inputs, model_info['features'])
 
-                    # Calculate scores for internal use
                     skill_count = len(user_inputs['selected_skills'])
-                    scores, binary_flags = calculate_skill_scores(
-                        user_inputs['selected_skills'])
+                    scores, binary_flags = calculate_skill_scores(user_inputs['selected_skills'])
                     derived = calculate_derived_features(binary_flags)
 
-                    # Show brief skill summary
                     if skill_count < 3 and not user_inputs['prof_experience']:
-                        st.warning(
-                            " **Note:** Limited skills and no professional experience may impact employability.")
+                        st.warning("Note: Limited skills and no professional experience may impact employability.")
 
-                    # Make prediction with reality check
-                    # Use probability from classifier
+                    raw_prediction = model.predict(features)[0]
                     raw_probability = model.predict_proba(features)[0][1]
 
-                    # Apply reality check (internal - no display)
                     adjusted_probability, _ = reality_check_prediction(
                         raw_probability, user_inputs, scores, derived
                     )
 
-                    # Use adjusted prediction
                     prediction = 1 if adjusted_probability >= 0.5 else 0
                     probability = adjusted_probability
 
-                    # Store results in session state
                     st.session_state['prediction'] = prediction
                     st.session_state['probability'] = probability
                     st.session_state['raw_probability'] = raw_probability
@@ -1584,184 +1579,168 @@ def main():
 
                 except Exception as e:
                     st.error(f"Prediction error: {str(e)}")
-                    st.text(
-                        f"Debug: Features shape: {features.shape if 'features' in locals() else 'Not created'}")
-                    st.text(
-                        f"Debug: Model features expected: {len(model_info['features']) if model_info else 'Unknown'}")
 
-        # Display results if prediction was made
+        # Enhanced Results Display
         with col2:
             if 'prediction' in st.session_state:
                 prediction = st.session_state['prediction']
                 probability = st.session_state['probability']
                 user_inputs = st.session_state['user_inputs']
 
-                st.header(" Prediction Result")
+                st.markdown('<div class="prediction-container">', unsafe_allow_html=True)
+                st.markdown('<h2 class="prediction-result-header">Prediction Result</h2>', unsafe_allow_html=True)
 
-                # Result box with improved styling
                 if prediction == 1:
                     st.markdown(f"""
                     <div class="prediction-box employed">
-                        <h2> High Employment Probability</h2>
+                        <h2>High Employment Probability</h2>
                         <h3>Success Rate: {probability:.1%}</h3>
-                        <p style="font-size: 1.1rem; margin-top: 1rem;">Your technical profile shows strong employment potential!</p>
+                        <p>Your technical profile shows strong employment potential!</p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown(f"""
                     <div class="prediction-box unemployed">
-                        <h2> Room for Improvement</h2>
+                        <h2>Room for Improvement</h2>
                         <h3>Current Probability: {probability:.1%}</h3>
-                        <p style="font-size: 1.1rem; margin-top: 1rem;">Consider expanding your technical skillset for better opportunities.</p>
+                        <p>Consider expanding your technical skillset for better opportunities.</p>
                     </div>
                     """, unsafe_allow_html=True)
 
-                # Modern confidence gauge
-                fig = go.Figure(go.Indicator(
-                    mode="gauge+number",
-                    value=probability * 100,
-                    domain={'x': [0, 1], 'y': [0, 1]},
-                    title={'text': "Employment Probability",
-                           'font': {'size': 16, 'color': '#2E86AB'}},
-                    number={'font': {'size': 24, 'color': '#2E86AB'}},
-                    gauge={
-                        'axis': {'range': [None, 100], 'tickcolor': '#6C757D'},
-                        'bar': {'color': "#2E86AB", 'thickness': 0.8},
-                        'steps': [
-                            {'range': [0, 40], 'color': "#FFE5E5"},
-                            {'range': [40, 70], 'color': "#FFF5E5"},
-                            {'range': [70, 100], 'color': "#E5F5E5"}
-                        ],
-                        'threshold': {
-                            'line': {'color': "#DC3545", 'width': 3},
-                            'thickness': 0.8,
-                            'value': 50
-                        },
-                        'bordercolor': "#E9ECEF",
-                        'borderwidth': 2
+                # Only show gauge if prediction exists
+                if 'prediction' in st.session_state:
+                    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+                    st.markdown('<h4 class="chart-title">Employment Probability Gauge</h4>', unsafe_allow_html=True)
+
+                    # Your gauge chart code here...
+                    fig = go.Figure(go.Indicator(
+                        mode = "gauge+number",
+                        value = probability * 100,
+                        domain = {'x': [0, 1], 'y': [0, 1]},
+                        number = {'font': {'size': 32, 'color': '#2c3e50', 'family': 'Poppins'}},
+                        gauge = {
+                            'axis': {
+                                'range': [None, 100],
+                                'tickcolor': '#64748b',
+                                'tickfont': {'size': 14, 'color': '#64748b'}
+                            },
+                            'bar': {'color': "#667eea", 'thickness': 0.7},
+                            'steps': [
+                                {'range': [0, 40], 'color': "#fee2e2"},
+                                {'range': [40, 70], 'color': "#fef3c7"},
+                                {'range': [70, 100], 'color': "#d1fae5"}
+                            ],
+                            'threshold': {
+                                'line': {'color': "#ef4444", 'width': 4},
+                                'thickness': 0.8,
+                                'value': 50
+                            },
+                            'bordercolor': "#e2e8f0",
+                            'borderwidth': 2
+                        }
+                    ))
+                    fig.update_layout(
+                        height=280,
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font={'family': 'Inter, sans-serif', 'size': 14}
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                # Only show radar chart if prediction exists
+                if 'prediction' in st.session_state:
+                    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+                    st.markdown('<h4 class="chart-title">Skills Profile Analysis</h4>', unsafe_allow_html=True)
+
+                    # Your radar chart code here...
+                    fig_radar = go.Figure()
+                    scores, _ = calculate_skill_scores(user_inputs['selected_skills'])
+                    skills_data = {
+                        'Programming': scores['Programming_Score'],
+                        'Web Tech': scores['Web_Score'],
+                        'Database': scores['Database_Score'],
+                        'Cloud/DevOps': scores['CloudDevOps_Score']
                     }
-                ))
-                fig.update_layout(
-                    height=280,
-                    margin=dict(l=20, r=20, t=50, b=20),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font={'family': 'Arial, sans-serif'}
-                )
-                st.plotly_chart(fig, use_container_width=True)
 
-                # Skills radar chart
-                scores, _ = calculate_skill_scores(
-                    user_inputs['selected_skills'])
-                skills_data = {
-                    'Programming': scores['Programming_Score'],
-                    'Web Tech': scores['Web_Score'],
-                    'Database': scores['Database_Score'],
-                    'Cloud/DevOps': scores['CloudDevOps_Score']
-                }
-
-                fig_radar = go.Figure()
-                fig_radar.add_trace(go.Scatterpolar(
-                    r=list(skills_data.values()),
-                    theta=list(skills_data.keys()),
-                    fill='toself',
-                    name='Your Skills',
-                    line=dict(color='#2E86AB', width=3),
-                    fillcolor='rgba(46, 134, 171, 0.3)',
-                    marker=dict(color='#2E86AB', size=8)
-                ))
-                fig_radar.update_layout(
-                    polar=dict(
-                        radialaxis=dict(
-                            visible=True,
-                            range=[0, 100],
-                            tickfont=dict(size=10, color='#6C757D'),
-                            gridcolor='#E9ECEF'
+                    fig_radar.add_trace(go.Scatterpolar(
+                        r=list(skills_data.values()),
+                        theta=list(skills_data.keys()),
+                        fill='toself',
+                        name='Your Skills',
+                        line=dict(color='#667eea', width=4),
+                        fillcolor='rgba(102, 126, 234, 0.25)',
+                        marker=dict(color='#667eea', size=10, symbol='circle')
+                    ))
+                    fig_radar.update_layout(
+                        polar=dict(
+                            radialaxis=dict(
+                                visible=True,
+                                range=[0, 100],
+                                tickfont=dict(size=12, color='#64748b', family='Inter'),
+                                gridcolor='#e2e8f0',
+                                linecolor='#cbd5e1'
+                            ),
+                            angularaxis=dict(
+                                tickfont=dict(size=14, color='#374151', family='Inter', weight=500),
+                                gridcolor='#e2e8f0',
+                                linecolor='#cbd5e1'
+                            ),
+                            bgcolor='rgba(0,0,0,0)'
                         ),
-                        angularaxis=dict(
-                            tickfont=dict(size=12, color='#495057'),
-                            gridcolor='#E9ECEF'
-                        ),
-                        bgcolor='rgba(0,0,0,0)'
-                    ),
-                    showlegend=False,
-                    title=dict(text="Skills Profile", x=0.5,
-                               font=dict(size=16, color='#2E86AB')),
-                    height=280,
-                    margin=dict(l=20, r=20, t=50, b=20),
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font={'family': 'Arial, sans-serif'}
-                )
-                st.plotly_chart(fig_radar, use_container_width=True)
+                        showlegend=False,
+                        height=280,
+                        margin=dict(l=10, r=10, t=10, b=10),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
+                        font={'family': 'Inter, sans-serif'}
+                    )
+                    st.plotly_chart(fig_radar, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
 
-                # Recommendations
-                st.subheader(" Recommendations")
+                # Enhanced recommendations
+                st.subheader("Personalized Recommendations")
                 recommendations = get_recommendations(probability, user_inputs)
-                for rec in recommendations:
-                    st.write(f"• {rec}")
+                for i, rec in enumerate(recommendations, 1):
+                    st.markdown(f"**{i}.** {rec}")
 
-                # PDF download
-                st.markdown("<br>", unsafe_allow_html=True)
-                if REPORTLAB_AVAILABLE:
-                    # Recompute scores/derived to ensure in-scope
-                    scores, binary_flags = calculate_skill_scores(
-                        user_inputs['selected_skills'])
-                    derived = calculate_derived_features(binary_flags)
-                    pdf_bytes = create_pdf_report(
-                        user_inputs=user_inputs,
-                        probability=probability,
-                        raw_probability=st.session_state.get(
-                            'raw_probability', probability),
-                        prediction=prediction,
-                        scores=scores,
-                        derived=derived,
-                        recommendations=recommendations,
-                        model_info=st.session_state.get(
-                            'model_info', {}) if 'model_info' in st.session_state else model_info,
-                    )
-                    filename = f"PredSeeker_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                    st.download_button(
-                        label="⬇️ Download PDF Report",
-                        data=pdf_bytes,
-                        file_name=filename,
-                        mime="application/pdf",
-                        use_container_width=True,
-                    )
-                else:
-                    st.info(
-                        "To enable PDF download, install ReportLab: pip install reportlab")
+                st.markdown('</div>', unsafe_allow_html=True)
+
 
     with tab2:
-        st.header("📊 About the Employment Prediction Model")
+        st.header("About the Employment Prediction Model")
 
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2, gap="large")
 
         with col1:
-            st.subheader(" How It Works")
-            st.write("""
+            st.subheader("How It Works")
+            st.markdown("""
             This AI model predicts developer employment probability using:
 
-            • **Machine Learning Algorithm:** XGBoost Gradient Boosting
-            • **Training Data:** 73,462 developers from Stack Overflow Survey
-            • **Features:** 21 engineered features including skills, demographics, and experience
-            • **Accuracy:** 89.5% ROC-AUC score on test data
+            **Machine Learning Algorithm:** XGBoost Gradient Boosting
+            **Training Data:** 73,462 developers from Stack Overflow Survey
+            **Features:** 21 engineered features including skills, demographics, and experience
+            **Accuracy:** 89.5% ROC-AUC score on test data
 
             The model analyzes your technical skills, professional background, and demographic information to provide employment insights.
             """)
 
-            st.subheader(" Key Features")
-            st.write("""
-            • **Skill Scores:** Programming, Web, Database, Cloud/DevOps
-            • **Derived Metrics:** Skill breadth, full-stack capability
-            • **Demographics:** Age, gender, accessibility needs
-            • **Professional:** Experience, education, developer status
+            st.subheader("Key Features")
+            st.markdown("""
+            **Skill Scores:** Programming, Web, Database, Cloud/DevOps
+            **Derived Metrics:** Skill breadth, full-stack capability
+            **Demographics:** Age, gender, accessibility needs
+            **Professional:** Experience, education, developer status
             """)
 
         with col2:
-            st.subheader(" Model Performance")
+            st.subheader("Model Performance")
 
-            # Performance metrics
+            # Enhanced performance metrics chart
+            st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+            st.markdown('<h4 class="chart-title">Performance Metrics</h4>', unsafe_allow_html=True)
+
             metrics_data = {
                 'Metric': ['ROC-AUC', 'Accuracy', 'Precision', 'Recall', 'F1-Score'],
                 'Score': [
@@ -1773,50 +1752,59 @@ def main():
                 ]
             }
 
-            fig_metrics = px.bar(
-                x=metrics_data['Score'],
-                y=metrics_data['Metric'],
-                orientation='h',
-                title="Model Performance Metrics",
-                color=metrics_data['Score'],
-                color_continuous_scale=['#FFE5E5', '#2E86AB'],
-                text=[f"{score:.3f}" for score in metrics_data['Score']]
-            )
+            fig_metrics = go.Figure(data=[
+                go.Bar(
+                    x=metrics_data['Score'],
+                    y=metrics_data['Metric'],
+                    orientation='h',
+                    marker=dict(
+                        color=['#667eea', '#764ba2', '#667eea', '#764ba2', '#667eea'],
+                        line=dict(color='rgba(0,0,0,0.1)', width=1)
+                    ),
+                    text=[f"{score:.3f}" for score in metrics_data['Score']],
+                    textposition='outside',
+                    textfont=dict(size=14, color='#2c3e50', family='Inter', weight=600)
+                )
+            ])
+
             fig_metrics.update_layout(
                 height=320,
-                showlegend=False,
-                title=dict(x=0.5, font=dict(size=16, color='#2E86AB')),
+                margin=dict(l=10, r=40, t=10, b=10),
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
-                margin=dict(l=20, r=20, t=50, b=20),
-                font={'family': 'Arial, sans-serif'},
-                xaxis=dict(gridcolor='#E9ECEF',
-                           tickfont=dict(color='#6C757D')),
-                yaxis=dict(gridcolor='#E9ECEF', tickfont=dict(color='#6C757D'))
+                font={'family': 'Inter, sans-serif'},
+                xaxis=dict(
+                    gridcolor='#e2e8f0',
+                    tickfont=dict(color='#64748b', size=12),
+                    showgrid=True,
+                    zeroline=False
+                ),
+                yaxis=dict(
+                    gridcolor='#e2e8f0',
+                    tickfont=dict(color='#374151', size=13, weight=500),
+                    showgrid=False
+                ),
+                showlegend=False
             )
-            fig_metrics.update_traces(
-                textposition='outside', textfont=dict(color='#495057'))
             st.plotly_chart(fig_metrics, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-            st.subheader(" Limitations")
-            st.write("""
-            • Predictions are probabilistic, not guarantees
-            • Based on survey data from specific time period
-            • Individual circumstances may vary
-            • Use as guidance, not definitive career advice
+            st.subheader("Limitations")
+            st.markdown("""
+            Predictions are probabilistic, not guarantees
+            Based on survey data from specific time period
+            Individual circumstances may vary
+            Use as guidance, not definitive career advice
             """)
 
-    # Footer
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    # Enhanced Footer
     st.markdown("""
-    <div style="text-align: center; color: #6C757D; padding: 30px; background-color: #f8f9fa; border-radius: 10px; margin-top: 2rem;">
-        <p style="font-size: 1.2rem; margin-bottom: 1rem;"><strong> PredSeeker</strong> - AI-Powered Developer Employment Prediction</p>
-        <p style="margin-bottom: 0.5rem;">Built with  using Streamlit • Powered by XGBoost ML Algorithm</p>
-        <p style="font-size: 0.9rem; color: #868e96; margin-bottom: 0;"><em>Disclaimer: This tool provides probabilistic predictions for guidance only. Individual results may vary.</em></p>
+    <div class="footer-section">
+        <p style="font-size: 1.4rem; margin-bottom: 1.5rem;"><strong>PredSeeker</strong> - AI-Powered Developer Employment Prediction</p>
+        <p style="margin-bottom: 1rem;">Built with Streamlit • Powered by XGBoost ML Algorithm</p>
+        <p style="font-size: 0.95rem; color: #64748b; margin-bottom: 0;"><em>Disclaimer: This tool provides probabilistic predictions for guidance only. Individual results may vary.</em></p>
     </div>
     """, unsafe_allow_html=True)
-
 
 if __name__ == "__main__":
     main()
