@@ -1297,72 +1297,7 @@ def main():
         st.info(" Make sure you have run the model training notebook and the model files exist in the 'models' directory.")
         return
 
-    # Sidebar - Model Info with enhanced styling
-    with st.sidebar:
-        # Model Performance Section
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                   border: 1px solid #dee2e6; border-radius: 10px; padding: 1.5rem; margin: 1rem 0;">
-            <h3 style="color: #2E86AB; text-align: center; margin-bottom: 1rem; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem;">
-                 Model Performance
-            </h3>
-        """, unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric(
-                "ROC-AUC", f"{model_info['performance_metrics']['ROC-AUC']:.3f}")
-            st.metric(
-                "Accuracy", f"{model_info['performance_metrics']['Accuracy']:.3f}")
-        with col2:
-            st.metric(
-                "F1-Score", f"{model_info['performance_metrics']['F1-Score']:.3f}")
-            st.metric(
-                "Precision", f"{model_info['performance_metrics']['Precision']:.3f}")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Model Info Section
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                   border: 1px solid #dee2e6; border-radius: 10px; padding: 1.5rem; margin: 1rem 0;">
-            <h3 style="color: #2E86AB; text-align: center; margin-bottom: 1rem; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem;">
-                 Model Info
-            </h3>
-            <div style="color: #212529; line-height: 1.6;">
-                <p><strong>Algorithm:</strong> {model_info['model_name']}</p>
-                <p><strong>Features:</strong> {len(model_info['features'])}</p>
-                <p><strong>Training Date:</strong> {model_info['training_date']}</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Dataset Stats Section
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-                   border: 1px solid #dee2e6; border-radius: 10px; padding: 1.5rem; margin: 1rem 0;">
-            <h3 style="color: #2E86AB; text-align: center; margin-bottom: 1rem; border-bottom: 2px solid #dee2e6; padding-bottom: 0.5rem;">
-                 Dataset Stats
-            </h3>
-            <div style="color: #212529; line-height: 1.6;">
-                <p><strong>Training Samples:</strong> 58,769</p>
-                <p><strong>Test Samples:</strong> 14,693</p>
-                <p><strong>Data Source:</strong> Stack Overflow Survey</p>
-                <p><strong>Employment Rate:</strong> ~74% (Balanced Dataset)</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # Additional Info
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #cce7ff 0%, #b3d7ff 100%);
-                   border: 1px solid #007bff; border-radius: 10px; padding: 1rem; margin: 1rem 0; text-align: center;">
-            <p style="color: #004085; margin: 0; font-size: 0.9rem;">
-                <strong> Tip:</strong> Select diverse skills across multiple categories for better employment predictions!
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-
+    
     # Main content
     tab1, tab2 = st.tabs([" Make Prediction", " About the Model"])
 
