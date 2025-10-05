@@ -1348,7 +1348,7 @@ def main():
             selected_skills = []
 
             with tab_prog:
-                st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+
                 st.markdown('<h4>Programming Languages & Frameworks</h4>', unsafe_allow_html=True)
                 prog_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['Programming']):
@@ -1358,7 +1358,7 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with tab_web:
-                st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+
                 st.markdown('<h4>Web Development Technologies</h4>', unsafe_allow_html=True)
                 web_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['Web']):
@@ -1368,7 +1368,7 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with tab_db:
-                st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+
                 st.markdown('<h4>Database & Data Storage</h4>', unsafe_allow_html=True)
                 db_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['Database']):
@@ -1378,7 +1378,7 @@ def main():
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with tab_cloud:
-                st.markdown('<div class="skill-category">', unsafe_allow_html=True)
+
                 st.markdown('<h4>Cloud Computing & DevOps</h4>', unsafe_allow_html=True)
                 cloud_cols = st.columns(3)
                 for i, skill in enumerate(SKILL_FAMILIES['CloudDevOps']):
@@ -1587,7 +1587,7 @@ def main():
                 probability = st.session_state['probability']
                 user_inputs = st.session_state['user_inputs']
 
-                st.markdown('<div class="prediction-container">', unsafe_allow_html=True)
+                
                 st.markdown('<h2 class="prediction-result-header">Prediction Result</h2>', unsafe_allow_html=True)
 
                 if prediction == 1:
