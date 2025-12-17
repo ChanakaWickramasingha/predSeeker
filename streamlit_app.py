@@ -1587,7 +1587,7 @@ def main():
                 probability = st.session_state['probability']
                 user_inputs = st.session_state['user_inputs']
 
-                
+
                 st.markdown('<h2 class="prediction-result-header">Prediction Result</h2>', unsafe_allow_html=True)
 
                 if prediction == 1:
